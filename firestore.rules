@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Goals collection - allow read and write for all users (unauthenticated can create goals)
+    match /goals/{goalId} {
+      allow read, write: if true;
+    }
+    
+    // Completions collection - require authentication to track progress
+    match /completions/{completionId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Settings collection - require authentication
+    match /settings/{settingId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Users collection - users can read/write their own document
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
+
