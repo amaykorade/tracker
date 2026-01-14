@@ -26,6 +26,8 @@ interface GoalItemProps {
   onUpdateGoal: (id: string, title: string) => void;
   onRegisterScroll?: (ref: HTMLDivElement | null) => void;
   onAuthRequired?: () => void;
+  isLocked?: boolean;
+  onUpgradeClick?: () => void;
 }
 
 export function GoalItem({
@@ -37,6 +39,8 @@ export function GoalItem({
   onUpdateGoal,
   onRegisterScroll,
   onAuthRequired,
+  isLocked = false,
+  onUpgradeClick,
 }: GoalItemProps) {
   const {
     attributes,
@@ -45,12 +49,15 @@ export function GoalItem({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: goal.id });
+  } = useSortable({ 
+    id: goal.id,
+    disabled: isLocked, // Disable drag for locked goals
+  });
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState(goal.title);
-  const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -75,8 +82,8 @@ export function GoalItem({
   useEffect(() => {
     if (isEditing && editedTitle !== goal.title) {
       // Clear existing timeout
-      if (saveTimeout) {
-        clearTimeout(saveTimeout);
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
       }
 
       // Set new timeout
@@ -88,20 +95,20 @@ export function GoalItem({
           setEditedTitle(goal.title);
         }
         setIsEditing(false);
-        setSaveTimeout(null);
+        saveTimeoutRef.current = null;
       }, 5000);
 
-      setSaveTimeout(timeout);
+      saveTimeoutRef.current = timeout;
 
       return () => {
         clearTimeout(timeout);
       };
-    } else if (!isEditing && saveTimeout) {
+    } else if (!isEditing && saveTimeoutRef.current) {
       // Clear timeout when not editing
-      clearTimeout(saveTimeout);
-      setSaveTimeout(null);
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
     }
-  }, [editedTitle, isEditing, goal.title, goal.id, onUpdateGoal, saveTimeout]);
+  }, [editedTitle, isEditing, goal.title, goal.id, onUpdateGoal]);
 
   // Focus input when editing starts
   useEffect(() => {
@@ -112,9 +119,9 @@ export function GoalItem({
   }, [isEditing]);
 
   const handleSave = useCallback(() => {
-    if (saveTimeout) {
-      clearTimeout(saveTimeout);
-      setSaveTimeout(null);
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
     }
     if (editedTitle.trim() && editedTitle !== goal.title) {
       onUpdateGoal(goal.id, editedTitle.trim());
@@ -123,16 +130,16 @@ export function GoalItem({
       setEditedTitle(goal.title);
     }
     setIsEditing(false);
-  }, [editedTitle, goal.id, goal.title, onUpdateGoal, saveTimeout]);
+  }, [editedTitle, goal.id, goal.title, onUpdateGoal]);
 
   const handleCancel = useCallback(() => {
     setEditedTitle(goal.title);
     setIsEditing(false);
-    if (saveTimeout) {
-      clearTimeout(saveTimeout);
-      setSaveTimeout(null);
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
     }
-  }, [goal.title, saveTimeout]);
+  }, [goal.title]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
@@ -150,29 +157,51 @@ export function GoalItem({
     opacity: isDragging ? 0.5 : 1,
   };
 
+  const handleLockedAction = () => {
+    if (onUpgradeClick) {
+      onUpgradeClick();
+    }
+  };
+
   return (
     <Card
       ref={setNodeRef}
       style={style}
       className={cn(
         "hover:shadow-md transition-shadow",
-        isDragging && "shadow-lg"
+        isDragging && "shadow-lg",
+        isLocked && "opacity-60 border-dashed"
       )}
     >
       <CardContent className="p-4">
         <div className="flex items-start gap-4">
           {/* Drag Handle and Goal Title */}
           <div className="flex items-center gap-2 w-[200px] flex-shrink-0">
-            <button
-              {...attributes}
-              {...listeners}
-              className="cursor-grab active:cursor-grabbing p-1 hover:bg-accent rounded flex-shrink-0"
-              aria-label="Drag to reorder"
-            >
-              <GripVertical className="h-5 w-5 text-muted-foreground" />
-            </button>
+            {isLocked ? (
+              <div className="p-1 flex-shrink-0">
+                <svg className="h-5 w-5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+            ) : (
+              <button
+                {...attributes}
+                {...listeners}
+                className="cursor-grab active:cursor-grabbing p-1 hover:bg-accent rounded flex-shrink-0"
+                aria-label="Drag to reorder"
+              >
+                <GripVertical className="h-5 w-5 text-muted-foreground" />
+              </button>
+            )}
             <div className="flex-1 min-w-0 overflow-x-auto goal-scroll-container">
-              {isEditing ? (
+              {isLocked ? (
+                <span
+                  className="font-medium whitespace-nowrap block text-muted-foreground px-1 py-0.5"
+                  title="Upgrade to Pro to unlock this goal"
+                >
+                  {goal.title}
+                </span>
+              ) : isEditing ? (
                 <Input
                   ref={inputRef}
                   value={editedTitle}
@@ -192,14 +221,28 @@ export function GoalItem({
                 </span>
               )}
             </div>
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => onDeleteGoal(goal.id)}
-              className="text-destructive hover:text-destructive h-8 w-8 flex-shrink-0"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            {isLocked ? (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleLockedAction}
+                className="text-muted-foreground hover:text-primary h-8 w-8 flex-shrink-0"
+                title="Upgrade to Pro to unlock"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </Button>
+            ) : (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => onDeleteGoal(goal.id)}
+                className="text-destructive hover:text-destructive h-8 w-8 flex-shrink-0"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
           </div>
 
           {/* Checkboxes Row */}
@@ -248,10 +291,15 @@ export function GoalItem({
                 const isFutureDate = dateToCheck > today;
 
                 // Add the checkbox button with enhanced date visibility
+                const isCheckboxDisabled = !isCurrentMonth || isFutureDate || isLocked;
                 elements.push(
                   <button
                     key={`${dateKey}-${index}`}
                     onClick={async () => {
+                      if (isLocked) {
+                        handleLockedAction();
+                        return;
+                      }
                       if (!isCurrentMonth || isFutureDate) return;
                       // Check if auth is required
                       try {
@@ -262,21 +310,26 @@ export function GoalItem({
                         }
                       }
                     }}
-                    disabled={!isCurrentMonth || isFutureDate}
+                    disabled={isCheckboxDisabled}
                     className={cn(
                       "w-10 h-10 border rounded flex flex-col items-center justify-center transition-all flex-shrink-0 group relative",
                       completed
                         ? "bg-green-500 border-green-600 text-white"
                         : "bg-background border-input hover:bg-accent",
-                      (!isCurrentMonth || isFutureDate) && "cursor-not-allowed opacity-50"
+                      isCheckboxDisabled && "cursor-not-allowed opacity-50",
+                      isLocked && "opacity-30"
                     )}
-                    title={isFutureDate 
-                      ? "Future dates cannot be completed" 
-                      : `${goal.title} - ${format(date, "MMM d, yyyy")}`}
+                    title={
+                      isLocked
+                        ? "Upgrade to Pro to unlock this goal"
+                        : isFutureDate 
+                        ? "Future dates cannot be completed" 
+                        : `${goal.title} - ${format(date, "MMM d, yyyy")}`
+                    }
                   >
                     {completed && <Check className="h-4 w-4" />}
                     {/* Show date on hover for better visibility */}
-                    {!isFutureDate && (
+                    {!isFutureDate && !isLocked && (
                       <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-foreground text-background text-[10px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20">
                         {format(date, "MMM d")}
                       </div>

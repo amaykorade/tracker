@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Goal, GoalCompletion } from "@/types";
 import { db } from "@/lib/firebase";
 import { useAuth } from "./use-auth";
+import { useToast } from "@/hooks/use-toast";
 import {
   collection,
   addDoc,
@@ -22,7 +23,8 @@ const LOCAL_STORAGE_MOTIVATION_KEY = "tracker_motivation";
 const LOCAL_STORAGE_DEFAULTS_ADDED_KEY = "tracker_defaults_added";
 
 export function useGoals() {
-  const { user } = useAuth();
+  const { user, isPro } = useAuth();
+  const { toast } = useToast();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [completions, setCompletions] = useState<Map<string, GoalCompletion>>(
     new Map()
@@ -245,6 +247,16 @@ export function useGoals() {
 
   const addGoal = useCallback(async (title: string) => {
     try {
+      // Enforce free tier goal limit for non-Pro users (authenticated or guest)
+      if (!isPro && goals.length >= 3) {
+        toast({
+          title: "Goal limit reached",
+          description: "Free plan allows up to 3 goals. Upgrade to Pro to add more goals.",
+        });
+        // Soft-fail: show toast but don't throw, to avoid unhandled promise rejections in UI
+        return;
+      }
+
       // Get the highest sortOrder and add 1
       const maxSortOrder = goals.length > 0 
         ? Math.max(...goals.map(g => g.sortOrder ?? 0))
@@ -277,7 +289,7 @@ export function useGoals() {
       console.error("Error adding goal:", error);
       throw error;
     }
-  }, [goals, user]);
+  }, [goals, user, isPro, toast]);
 
   const deleteGoal = useCallback(async (id: string) => {
     try {

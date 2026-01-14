@@ -1,7 +1,9 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import { Goal, GoalCompletion } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   LineChart,
   Line,
@@ -17,37 +19,126 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { format, subDays, eachDayOfInterval, startOfWeek, endOfWeek, eachWeekOfInterval, getDay, startOfMonth, endOfMonth, eachMonthOfInterval, isSameMonth, isSameDay } from "date-fns";
+import { format, subDays, eachDayOfInterval, startOfWeek, endOfWeek, eachWeekOfInterval, getDay, startOfMonth, endOfMonth, eachMonthOfInterval, isSameMonth, isSameDay, startOfYear, endOfYear, subMonths } from "date-fns";
 import { formatDateKey } from "@/lib/date-utils";
+import { Calendar, Filter } from "lucide-react";
 
 interface KPIDashboardProps {
   goals: Goal[];
   completions: Map<string, GoalCompletion>;
   months: Array<{ year: number; month: number }>;
+  isPro?: boolean;
+  onUpgradeClick?: () => void;
 }
 
 export function KPIDashboard({
   goals,
   completions,
   months,
+  isPro = true,
+  onUpgradeClick,
 }: KPIDashboardProps) {
-  // Calculate overall completion rate based on actual months
-  const totalDays = months.reduce((acc, { year, month }) => {
-    const monthStart = new Date(year, month, 1);
-    const monthEnd = new Date(year, month + 1, 0);
-    return acc + monthEnd.getDate();
-  }, 0);
+  const now = new Date();
+  const currentMonth = { year: now.getFullYear(), month: now.getMonth() };
+  
+  // Date range state for Pro users
+  const [dateRange, setDateRange] = useState<"all" | "7days" | "30days" | "3months" | "year" | "custom">("all");
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
+  
+  // Calculate date range based on selection
+  const { startDate, endDate } = useMemo(() => {
+    if (!isPro) {
+      // Free users: only current month
+      return {
+        startDate: new Date(currentMonth.year, currentMonth.month, 1),
+        endDate: new Date(currentMonth.year, currentMonth.month + 1, 0),
+      };
+    }
+    
+    // Pro users: based on selected range
+    switch (dateRange) {
+      case "7days":
+        return {
+          startDate: subDays(now, 6),
+          endDate: now,
+        };
+      case "30days":
+        return {
+          startDate: subDays(now, 29),
+          endDate: now,
+        };
+      case "3months":
+        return {
+          startDate: subMonths(now, 3),
+          endDate: now,
+        };
+      case "year":
+        return {
+          startDate: startOfYear(now),
+          endDate: now,
+        };
+      case "custom":
+        if (customStartDate && customEndDate) {
+          return {
+            startDate: new Date(customStartDate),
+            endDate: new Date(customEndDate),
+          };
+        }
+        // Fallback to all if custom dates not set
+        return {
+          startDate: months.length > 0 
+            ? new Date(Math.min(...months.map(m => new Date(m.year, m.month, 1).getTime())))
+            : subDays(now, 29),
+          endDate: now,
+        };
+      case "all":
+      default:
+        // All available months
+        return {
+          startDate: months.length > 0 
+            ? new Date(Math.min(...months.map(m => new Date(m.year, m.month, 1).getTime())))
+            : subDays(now, 29),
+          endDate: now,
+        };
+    }
+  }, [isPro, dateRange, customStartDate, customEndDate, months, now, currentMonth]);
+  
+  // Filter months based on date range
+  const filteredMonths = useMemo(() => {
+    if (!isPro) {
+      return months.filter(m => m.year === currentMonth.year && m.month === currentMonth.month);
+    }
+    
+    return months.filter(({ year, month }) => {
+      const monthStart = new Date(year, month, 1);
+      const monthEnd = new Date(year, month + 1, 0);
+      return monthStart <= endDate && monthEnd >= startDate;
+    });
+  }, [months, isPro, currentMonth, startDate, endDate]);
+  // Calculate overall completion rate based on filtered date range
+  const rangeDays = eachDayOfInterval({ start: startDate, end: endDate });
+  const totalDays = rangeDays.length;
   const totalPossibleCompletions = goals.length * totalDays;
-  const totalCompletions = completions.size;
+  
+  // Count completions within the date range
+  let totalCompletions = 0;
+  completions.forEach((completion) => {
+    const completionDate = new Date(completion.date);
+    if (completionDate >= startDate && completionDate <= endDate) {
+      totalCompletions++;
+    }
+  });
+  
   const completionRate =
     totalPossibleCompletions > 0
       ? ((totalCompletions / totalPossibleCompletions) * 100).toFixed(1)
       : "0";
 
-  // Calculate daily completion data for the last 30 days
+  // Calculate daily completion data based on selected range
   const last30Days = eachDayOfInterval({
-    start: subDays(new Date(), 29),
-    end: new Date(),
+    start: startDate,
+    end: endDate,
   });
 
   const dailyData = last30Days.map((date) => {
@@ -65,44 +156,46 @@ export function KPIDashboard({
     };
   });
 
-  // Calculate goal-wise completion data
+  // Calculate goal-wise completion data (within date range)
   const goalData = goals.map((goal) => {
     let completed = 0;
     completions.forEach((completion) => {
       if (completion.goalId === goal.id) {
-        completed++;
+        const completionDate = new Date(completion.date);
+        if (completionDate >= startDate && completionDate <= endDate) {
+          completed++;
+        }
       }
     });
     return {
       name: goal.title.length > 15 ? goal.title.substring(0, 15) + "..." : goal.title,
       completed,
-      percentage: months.length > 0 
-        ? ((completed / (goals.length * months.length * 30)) * 100).toFixed(0)
+      percentage: totalDays > 0 
+        ? ((completed / totalDays) * 100).toFixed(0)
         : 0,
     };
   });
 
-  // Calculate streak data
-  const currentStreak = calculateCurrentStreak(goals, completions);
-  const longestStreak = calculateLongestStreak(goals, completions);
+  // Calculate streak data (within date range)
+  const currentStreak = calculateCurrentStreak(goals, completions, startDate, endDate);
+  const longestStreak = calculateLongestStreak(goals, completions, startDate, endDate);
 
-  // Calculate Average Daily Completions
+  // Calculate Average Daily Completions (within date range)
   const allCompletionDates = new Set<string>();
   completions.forEach((completion) => {
-    allCompletionDates.add(completion.date);
+    const completionDate = new Date(completion.date);
+    if (completionDate >= startDate && completionDate <= endDate) {
+      allCompletionDates.add(completion.date);
+    }
   });
   const totalDaysWithCompletions = allCompletionDates.size;
   const averageDailyCompletions = totalDaysWithCompletions > 0
     ? (totalCompletions / totalDaysWithCompletions).toFixed(1)
     : "0";
 
-  // Calculate Consistency Score (days with at least one completion / total days)
-  const firstCompletionDate = completions.size > 0
-    ? new Date(Math.min(...Array.from(completions.values()).map(c => new Date(c.date).getTime())))
-    : new Date();
-  const daysSinceStart = Math.max(1, Math.floor((new Date().getTime() - firstCompletionDate.getTime()) / (1000 * 60 * 60 * 24)));
-  const consistencyScore = daysSinceStart > 0
-    ? ((totalDaysWithCompletions / daysSinceStart) * 100).toFixed(1)
+  // Calculate Consistency Score (days with at least one completion / total days in range)
+  const consistencyScore = totalDays > 0
+    ? ((totalDaysWithCompletions / totalDays) * 100).toFixed(1)
     : "0";
 
   // Calculate Completion by Day of Week
@@ -118,26 +211,25 @@ export function KPIDashboard({
 
   completions.forEach((completion) => {
     const date = new Date(completion.date);
-    const dayOfWeek = getDay(date);
-    const dayData = dayOfWeekData.find(d => d.day === dayOfWeek);
-    if (dayData) {
-      dayData.completed++;
+    // Only count completions within the selected date range
+    if (date >= startDate && date <= endDate) {
+      const dayOfWeek = getDay(date);
+      const dayData = dayOfWeekData.find(d => d.day === dayOfWeek);
+      if (dayData) {
+        dayData.completed++;
+      }
     }
   });
 
-  // Calculate total possible completions per day of week
-  if (goals.length > 0 && months.length > 0) {
-    months.forEach(({ year, month }) => {
-      const monthStart = startOfMonth(new Date(year, month, 1));
-      const monthEnd = endOfMonth(monthStart);
-      const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
-      days.forEach((day) => {
-        const dayOfWeek = getDay(day);
-        const dayData = dayOfWeekData.find(d => d.day === dayOfWeek);
-        if (dayData) {
-          dayData.total += goals.length;
-        }
-      });
+  // Calculate total possible completions per day of week (within date range)
+  if (goals.length > 0) {
+    const rangeDays = eachDayOfInterval({ start: startDate, end: endDate });
+    rangeDays.forEach((day) => {
+      const dayOfWeek = getDay(day);
+      const dayData = dayOfWeekData.find(d => d.day === dayOfWeek);
+      if (dayData) {
+        dayData.total += goals.length;
+      }
     });
   }
 
@@ -145,9 +237,9 @@ export function KPIDashboard({
     day.completed = day.total > 0 ? ((day.completed / day.total) * 100) : 0;
   });
 
-  // Calculate Monthly Comparison
+  // Calculate Monthly Comparison (only for Pro users with multiple months)
   const monthlyData: Array<{ month: string; completed: number; total: number; rate: number }> = [];
-  months.forEach(({ year, month }) => {
+  filteredMonths.forEach(({ year, month }) => {
     const monthStart = startOfMonth(new Date(year, month, 1));
     const monthEnd = endOfMonth(monthStart);
     const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
@@ -171,23 +263,18 @@ export function KPIDashboard({
     });
   });
 
-  // Calculate Goal Completion Percentage (for pie chart)
+  // Calculate Goal Completion Percentage (for pie chart) - within date range
   const goalCompletionData = goals.map((goal) => {
     let goalCompleted = 0;
     let goalTotal = 0;
 
-    months.forEach(({ year, month }) => {
-      const monthStart = startOfMonth(new Date(year, month, 1));
-      const monthEnd = endOfMonth(monthStart);
-      const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
-      goalTotal += days.length;
-
-      days.forEach((day) => {
-        const dateKey = formatDateKey(day);
-        if (completions.has(`${goal.id}-${dateKey}`)) {
-          goalCompleted++;
-        }
-      });
+    // Use the date range days instead of filtered months
+    rangeDays.forEach((day) => {
+      goalTotal++;
+      const dateKey = formatDateKey(day);
+      if (completions.has(`${goal.id}-${dateKey}`)) {
+        goalCompleted++;
+      }
     });
 
     return {
@@ -198,11 +285,12 @@ export function KPIDashboard({
     };
   });
 
-  // Calculate Weekly Heatmap Data (last 12 weeks)
+  // Calculate Weekly Heatmap Data (based on date range)
   const weeksData: Array<{ week: string; date: Date; completions: number }> = [];
-  const twelveWeeksAgo = subDays(new Date(), 84);
+  const weeksAgo = Math.ceil((endDate.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000));
+  const weeksStartDate = subDays(endDate, Math.min(weeksAgo * 7, 84)); // Max 12 weeks
   const weeks = eachWeekOfInterval(
-    { start: twelveWeeksAgo, end: new Date() },
+    { start: weeksStartDate > startDate ? weeksStartDate : startDate, end: endDate },
     { weekStartsOn: 0 }
   );
 
@@ -243,6 +331,120 @@ export function KPIDashboard({
 
   return (
     <div className="space-y-6">
+      {/* Free plan limitation notice */}
+      {!isPro && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium mb-1">Current Month Analytics Only</p>
+                <p className="text-xs text-muted-foreground">
+                  Free plan shows analytics for the current month only. Upgrade to Pro to see historical data and advanced insights.
+                </p>
+              </div>
+              {onUpgradeClick && (
+                <Button size="sm" onClick={onUpgradeClick} className="ml-4">
+                  Upgrade to Pro
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Date Range Filter for Pro Users */}
+      {isPro && (
+        <Card className="border-2">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-base">Date Range</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={dateRange === "all" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setDateRange("all")}
+              >
+                All Time
+              </Button>
+              <Button
+                variant={dateRange === "7days" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setDateRange("7days")}
+              >
+                Last 7 Days
+              </Button>
+              <Button
+                variant={dateRange === "30days" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setDateRange("30days")}
+              >
+                Last 30 Days
+              </Button>
+              <Button
+                variant={dateRange === "3months" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setDateRange("3months")}
+              >
+                Last 3 Months
+              </Button>
+              <Button
+                variant={dateRange === "year" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setDateRange("year")}
+              >
+                This Year
+              </Button>
+              <Button
+                variant={dateRange === "custom" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setDateRange("custom")}
+              >
+                <Calendar className="h-4 w-4 mr-2" />
+                Custom Range
+              </Button>
+            </div>
+            
+            {dateRange === "custom" && (
+              <div className="flex items-center gap-4 pt-2 border-t">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-muted-foreground">From:</label>
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                    className="px-3 py-1.5 border rounded-md text-sm"
+                    max={format(now, "yyyy-MM-dd")}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-muted-foreground">To:</label>
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                    className="px-3 py-1.5 border rounded-md text-sm"
+                    max={format(now, "yyyy-MM-dd")}
+                    min={customStartDate || undefined}
+                  />
+                </div>
+                {customStartDate && customEndDate && customStartDate > customEndDate && (
+                  <p className="text-xs text-destructive">Start date must be before end date</p>
+                )}
+              </div>
+            )}
+            
+            {dateRange !== "custom" && (
+              <p className="text-xs text-muted-foreground">
+                Showing data from {format(startDate, "MMM d, yyyy")} to {format(endDate, "MMM d, yyyy")}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
         <Card>
           <CardHeader className="pb-2">
@@ -461,13 +663,21 @@ export function KPIDashboard({
 
 function calculateCurrentStreak(
   goals: Goal[],
-  completions: Map<string, GoalCompletion>
+  completions: Map<string, GoalCompletion>,
+  startDate?: Date,
+  endDate?: Date
 ): number {
   if (goals.length === 0) return 0;
 
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const rangeEnd = endDate ? new Date(endDate) : today;
+  rangeEnd.setHours(0, 0, 0, 0);
+  const rangeStart = startDate ? new Date(startDate) : subDays(today, 365);
+  rangeStart.setHours(0, 0, 0, 0);
+
   let streak = 0;
-  let currentDate = new Date();
-  currentDate.setHours(0, 0, 0, 0);
+  let currentDate = new Date(rangeEnd);
 
   while (true) {
     const dateKey = formatDateKey(currentDate);
@@ -494,14 +704,26 @@ function calculateCurrentStreak(
 
 function calculateLongestStreak(
   goals: Goal[],
-  completions: Map<string, GoalCompletion>
+  completions: Map<string, GoalCompletion>,
+  startDate?: Date,
+  endDate?: Date
 ): number {
   if (goals.length === 0) return 0;
 
-  // Get all completion dates
+  // Get all completion dates within range
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const rangeEnd = endDate ? new Date(endDate) : today;
+  rangeEnd.setHours(23, 59, 59, 999);
+  const rangeStart = startDate ? new Date(startDate) : subDays(today, 365);
+  rangeStart.setHours(0, 0, 0, 0);
+
   const completionDates = new Set<string>();
   completions.forEach((completion) => {
-    completionDates.add(completion.date);
+    const completionDate = new Date(completion.date);
+    if (completionDate >= rangeStart && completionDate <= rangeEnd) {
+      completionDates.add(completion.date);
+    }
   });
 
   // Sort dates

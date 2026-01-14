@@ -39,6 +39,8 @@ interface GoalListProps {
   onUpdateMotivation?: (text: string) => void;
   monthControls?: React.ReactNode;
   onAuthRequired?: () => void;
+  isPro?: boolean;
+  onUpgradeClick?: () => void;
 }
 
 export function GoalList({
@@ -54,6 +56,8 @@ export function GoalList({
   onUpdateMotivation,
   monthControls,
   onAuthRequired,
+  isPro = true,
+  onUpgradeClick,
 }: GoalListProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -65,9 +69,31 @@ export function GoalList({
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
-    if (over && active.id !== over.id) {
-      onReorderGoals(active.id as string, over.id as string);
+    if (!over || active.id === over.id) {
+      return;
     }
+
+    // On free plan, prevent reordering that would unlock locked goals
+    if (!isPro) {
+      const activeIndex = goals.findIndex((g) => g.id === active.id);
+      const overIndex = goals.findIndex((g) => g.id === over.id);
+
+      // Prevent locked goals (index >= 3) from being moved
+      if (activeIndex >= 3) {
+        return; // Locked goal cannot be moved
+      }
+
+      // Prevent unlocked goals from being moved to locked positions (>= 3)
+      if (overIndex >= 3) {
+        return; // Cannot move unlocked goal to locked position
+      }
+
+      // Unlocked goals can only be reordered among themselves (0-2)
+      // This is allowed, so continue with the reorder
+    }
+
+    // Allow the reorder
+    onReorderGoals(active.id as string, over.id as string);
   };
 
   // Synchronize scrolling between dates header and goal rows
@@ -364,21 +390,54 @@ export function GoalList({
                 items={goals.map((g) => g.id)}
                 strategy={verticalListSortingStrategy}
               >
-                {goals.map((goal) => (
-                  <GoalItem
-                    key={goal.id}
-                    goal={goal}
-                    allDates={allDates}
-                    isCompleted={isCompleted}
-                    onToggleCompletion={onToggleCompletion}
-                    onUpdateGoal={onUpdateGoal}
-                    onDeleteGoal={onDeleteGoal}
-                    onRegisterScroll={(ref) => registerGoalScroll(goal.id, ref)}
-                    onAuthRequired={onAuthRequired}
-                  />
-                ))}
+                {goals.map((goal, index) => {
+                  // On free plan, goals beyond the first 3 are locked
+                  const isLocked = !isPro && index >= 3;
+                  return (
+                    <GoalItem
+                      key={goal.id}
+                      goal={goal}
+                      allDates={allDates}
+                      isCompleted={isCompleted}
+                      onToggleCompletion={onToggleCompletion}
+                      onUpdateGoal={onUpdateGoal}
+                      onDeleteGoal={onDeleteGoal}
+                      onRegisterScroll={(ref) => registerGoalScroll(goal.id, ref)}
+                      onAuthRequired={onAuthRequired}
+                      isLocked={isLocked}
+                      onUpgradeClick={onUpgradeClick}
+                    />
+                  );
+                })}
               </SortableContext>
             </DndContext>
+            
+            {/* Show message about locked goals */}
+            {!isPro && goals.length > 3 && (
+              <Card className="mt-4 border-primary/20 bg-primary/5">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">
+                        {goals.length - 3} goal{goals.length - 3 > 1 ? 's' : ''} locked
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Upgrade to Pro to unlock all {goals.length} goals and track unlimited goals.
+                      </p>
+                    </div>
+                    {onUpgradeClick && (
+                      <Button
+                        size="sm"
+                        onClick={onUpgradeClick}
+                        className="ml-4"
+                      >
+                        Upgrade to Pro
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       )}
