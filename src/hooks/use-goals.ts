@@ -49,6 +49,7 @@ export function useGoals() {
             title: defaultGoal.title,
             createdAt: Timestamp.now(),
             sortOrder: defaultGoal.sortOrder,
+            userId: user.uid, // Associate goal with user
           });
         }
         await batch.commit();
@@ -73,10 +74,11 @@ export function useGoals() {
   // Load goals from Firestore (authenticated) or localStorage (unauthenticated)
   useEffect(() => {
     if (user) {
-      // User is authenticated - load from Firestore
+      // User is authenticated - load from Firestore (filter by userId)
       const goalsRef = collection(db, "goals");
+      const goalsQuery = query(goalsRef, where("userId", "==", user.uid));
       const unsubscribeGoals = onSnapshot(
-        goalsRef,
+        goalsQuery,
         async (snapshot) => {
           const goalsData: Goal[] = [];
           snapshot.forEach((doc) => {
@@ -166,10 +168,11 @@ export function useGoals() {
   // Load completions from Firestore (authenticated) or localStorage (unauthenticated)
   useEffect(() => {
     if (user) {
-      // User is authenticated - load from Firestore
+      // User is authenticated - load from Firestore (filter by userId)
       const completionsRef = collection(db, "completions");
+      const completionsQuery = query(completionsRef, where("userId", "==", user.uid));
       const unsubscribeCompletions = onSnapshot(
-        completionsRef,
+        completionsQuery,
         (snapshot) => {
           const completionsMap = new Map<string, GoalCompletion>();
           snapshot.forEach((doc) => {
@@ -200,8 +203,8 @@ export function useGoals() {
   // Load motivation from Firestore (authenticated) or localStorage (unauthenticated)
   useEffect(() => {
     if (user) {
-      // User is authenticated - load from Firestore
-      const motivationRef = doc(db, "settings", "motivation");
+      // User is authenticated - load from Firestore (user-specific settings)
+      const motivationRef = doc(db, "settings", user.uid);
       const unsubscribe = onSnapshot(
         motivationRef,
         (snapshot) => {
@@ -233,7 +236,8 @@ export function useGoals() {
   const updateMotivation = useCallback(async (text: string) => {
     try {
       if (user) {
-        const motivationRef = doc(db, "settings", "motivation");
+        // Store motivation in user-specific settings document
+        const motivationRef = doc(db, "settings", user.uid);
         await setDoc(motivationRef, { text }, { merge: true });
       } else {
         localStorage.setItem(LOCAL_STORAGE_MOTIVATION_KEY, text);
@@ -270,11 +274,12 @@ export function useGoals() {
       };
 
       if (user) {
-        // User is authenticated - save to Firestore
+        // User is authenticated - save to Firestore with userId
         const docRef = await addDoc(collection(db, "goals"), {
           title,
           createdAt: Timestamp.now(),
           sortOrder: maxSortOrder + 1,
+          userId: user.uid, // Associate goal with user
         });
         newGoal.id = docRef.id;
       } else {
@@ -297,9 +302,13 @@ export function useGoals() {
         // User is authenticated - delete from Firestore
         await deleteDoc(doc(db, "goals", id));
         
-        // Delete all completions for this goal
+        // Delete all completions for this goal (filter by userId for security)
         const completionsRef = collection(db, "completions");
-        const q = query(completionsRef, where("goalId", "==", id));
+        const q = query(
+          completionsRef,
+          where("goalId", "==", id),
+          where("userId", "==", user.uid)
+        );
         const snapshot = await getDocs(q);
         
         const deletePromises = snapshot.docs.map((doc) => deleteDoc(doc.ref));
@@ -325,18 +334,21 @@ export function useGoals() {
       
       try {
         const key = `${goalId}-${date}`;
-        const completionRef = doc(db, "completions", key);
+        // Use userId in document ID to ensure user isolation
+        const completionId = `${user.uid}-${goalId}-${date}`;
+        const completionRef = doc(db, "completions", completionId);
         const existing = completions.has(key);
         
         if (existing) {
           // Delete completion
           await deleteDoc(completionRef);
         } else {
-          // Add completion
+          // Add completion with userId
           await setDoc(completionRef, {
             goalId,
             date,
             completed: true,
+            userId: user.uid, // Associate completion with user
           });
         }
       } catch (error) {
@@ -444,6 +456,7 @@ export function useGoals() {
               title: goal.title,
               createdAt: Timestamp.fromDate(createdAt),
               sortOrder: goal.sortOrder ?? 0,
+              userId: user.uid, // Associate migrated goal with user
             });
           }
           
@@ -457,7 +470,8 @@ export function useGoals() {
       // Migrate motivation (only if Firestore doesn't have one)
       const storedMotivation = localStorage.getItem(LOCAL_STORAGE_MOTIVATION_KEY);
       if (storedMotivation) {
-        const motivationRef = doc(db, "settings", "motivation");
+        // Store in user-specific settings document
+        const motivationRef = doc(db, "settings", user.uid);
         // Use merge to not overwrite existing motivation
         await setDoc(motivationRef, { text: storedMotivation }, { merge: true });
         localStorage.removeItem(LOCAL_STORAGE_MOTIVATION_KEY);

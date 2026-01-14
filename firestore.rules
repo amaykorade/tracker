@@ -1,19 +1,27 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Goals collection - allow read and write for all users (unauthenticated can create goals)
+    // Goals collection - users can only read/write their own goals
     match /goals/{goalId} {
-      allow read, write: if true;
+      // Allow read if the goal belongs to the authenticated user
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      // Allow write (create/update) if userId matches authenticated user
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
     
-    // Completions collection - require authentication to track progress
+    // Completions collection - users can only read/write their own completions
     match /completions/{completionId} {
-      allow read, write: if request.auth != null;
+      // Allow read if the completion belongs to the authenticated user
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      // Allow write (create/update/delete) if userId matches authenticated user
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
     
-    // Settings collection - require authentication
-    match /settings/{settingId} {
-      allow read, write: if request.auth != null;
+    // Settings collection - users can only read/write their own settings (document ID = userId)
+    match /settings/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     
     // Users collection - users can read/write their own document

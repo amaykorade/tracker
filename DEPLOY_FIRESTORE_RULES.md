@@ -35,7 +35,12 @@ firebase deploy --only firestore:rules
 
 ## Current Rules Summary
 
-- **Goals**: Allow read/write for all users (authenticated and unauthenticated)
-- **Completions**: Require authentication (only logged-in users can track progress)
-- **Settings**: Require authentication (only logged-in users can save settings)
+- **Goals**: Users can only read/write their own goals (where `userId` matches `auth.uid`)
+- **Completions**: Users can only read/write their own completions (where `userId` matches `auth.uid`)
+- **Settings**: Users can only read/write their own settings (document ID = `auth.uid`)
+- **Users**: Users can only read/write their own user document (document ID = `auth.uid`)
+
+## Important Notes
+
+⚠️ **User Data Isolation**: All data is now properly isolated by user. Each user can only access their own goals, completions, and settings. See `USER_DATA_MAPPING.md` for details on how to query user-specific data.
 
