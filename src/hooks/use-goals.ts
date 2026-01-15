@@ -332,6 +332,22 @@ export function useGoals() {
         throw new Error("Authentication required");
       }
       
+      // Prevent manipulation: only allow toggling today's date
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const dateToCheck = new Date(date);
+      dateToCheck.setHours(0, 0, 0, 0);
+      
+      if (dateToCheck < today) {
+        // Past date - cannot be changed
+        throw new Error("Past dates cannot be changed");
+      }
+      
+      if (dateToCheck > today) {
+        // Future date - cannot be completed
+        throw new Error("Future dates cannot be completed");
+      }
+      
       try {
         const key = `${goalId}-${date}`;
         // Use userId in document ID to ensure user isolation
@@ -340,10 +356,10 @@ export function useGoals() {
         const existing = completions.has(key);
         
         if (existing) {
-          // Delete completion
+          // Delete completion (only allowed for today)
           await deleteDoc(completionRef);
         } else {
-          // Add completion with userId
+          // Add completion with userId (only allowed for today)
           await setDoc(completionRef, {
             goalId,
             date,

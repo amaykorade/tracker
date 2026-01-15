@@ -283,15 +283,18 @@ export function GoalItem({
                   }
                 }
                 
-                // Check if date is in the future
+                // Check if date is in the future or past (only allow today)
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
                 const dateToCheck = new Date(date);
                 dateToCheck.setHours(0, 0, 0, 0);
                 const isFutureDate = dateToCheck > today;
+                const isPastDate = dateToCheck < today;
+                const isToday = dateToCheck.getTime() === today.getTime();
 
                 // Add the checkbox button with enhanced date visibility
-                const isCheckboxDisabled = !isCurrentMonth || isFutureDate || isLocked;
+                // Disable if: not current month, future date, past date (not today), or locked
+                const isCheckboxDisabled = !isCurrentMonth || isFutureDate || isPastDate || isLocked;
                 elements.push(
                   <button
                     key={`${dateKey}-${index}`}
@@ -300,7 +303,7 @@ export function GoalItem({
                         handleLockedAction();
                         return;
                       }
-                      if (!isCurrentMonth || isFutureDate) return;
+                      if (!isCurrentMonth || isFutureDate || isPastDate) return;
                       // Check if auth is required
                       try {
                         await onToggleCompletion(goal.id, dateKey);
@@ -324,12 +327,14 @@ export function GoalItem({
                         ? "Upgrade to Pro to unlock this goal"
                         : isFutureDate 
                         ? "Future dates cannot be completed" 
+                        : isPastDate
+                        ? "Past dates cannot be changed"
                         : `${goal.title} - ${format(date, "MMM d, yyyy")}`
                     }
                   >
                     {completed && <Check className="h-4 w-4" />}
-                    {/* Show date on hover for better visibility */}
-                    {!isFutureDate && !isLocked && (
+                    {/* Show date on hover for better visibility (only for today) */}
+                    {isToday && !isLocked && (
                       <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-foreground text-background text-[10px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20">
                         {format(date, "MMM d")}
                       </div>
