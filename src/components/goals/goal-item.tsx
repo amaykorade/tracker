@@ -3,7 +3,7 @@
 import { Goal, MonthData } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Trash2, Check, GripVertical } from "lucide-react";
+import { Trash2, Check, GripVertical, AlertTriangle } from "lucide-react";
 import { formatDateKey, getTrackingDate, compareWithTrackingDate } from "@/lib/date-utils";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,13 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface GoalItemProps {
   goal: Goal;
@@ -58,6 +65,7 @@ export function GoalItem({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState(goal.title);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -170,7 +178,17 @@ export function GoalItem({
     }
   };
 
+  const handleDeleteClick = () => {
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    onDeleteGoal(goal.id);
+    setDeleteDialogOpen(false);
+  };
+
   return (
+    <>
     <Card
       ref={setNodeRef}
       style={style}
@@ -246,7 +264,7 @@ export function GoalItem({
               <Button
                 size="icon"
                 variant="ghost"
-                onClick={() => onDeleteGoal(goal.id)}
+                onClick={handleDeleteClick}
                 className="text-destructive hover:text-destructive h-8 w-8 flex-shrink-0"
               >
                 <Trash2 className="h-4 w-4" />
@@ -355,6 +373,37 @@ export function GoalItem({
         </div>
       </CardContent>
     </Card>
+
+    {/* Delete Confirmation Dialog - Rendered outside Card to avoid clipping */}
+    <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+            Delete Goal
+          </DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete <strong>"{goal.title}"</strong>? This action cannot be undone and will permanently delete all tracking data for this goal.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex justify-end gap-2 mt-4">
+          <Button
+            variant="outline"
+            onClick={() => setDeleteDialogOpen(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="default"
+            onClick={handleConfirmDelete}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            Delete Goal
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 
