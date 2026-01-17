@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useGoals } from "@/hooks/use-goals";
 import { useAuth } from "@/hooks/use-auth";
+import { useTheme } from "@/components/providers/theme-provider";
 import { generateMonthData, getMonthRange } from "@/lib/date-utils";
 import { GoalList } from "@/components/goals/goal-list";
 import { MonthControls } from "@/components/calendar/month-controls";
@@ -21,6 +22,7 @@ import { Button } from "@/components/ui/button";
 
 export default function Home() {
   const { user, isPro, plan } = useAuth();
+  const { resolvedTheme } = useTheme();
   const { goals, addGoal, updateGoal, deleteGoal, toggleCompletion, isCompleted, completions, loading, reorderGoals, motivation, updateMotivation } = useGoals();
   const { toast } = useToast();
   const [months, setMonths] = useState<Array<{ year: number; month: number }>>(() => {
@@ -165,7 +167,14 @@ export default function Home() {
         email: user.email || "",
       },
       theme: {
-        color: "#10b981",
+        // Match UI theme colors - use primary color from CSS variables
+        // Light mode: dark gray (#171717), Dark mode: light gray (#fafafa)
+        // For better visibility in Razorpay, using accent-friendly colors
+        color: resolvedTheme === "dark" 
+          ? "#fafafa"  // Light color for dark mode (matches primary-foreground)
+          : "#171717", // Dark color for light mode (matches primary)
+        // Hide top bar for cleaner UI
+        hide_topbar: false,
       },
     };
 
