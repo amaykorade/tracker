@@ -39,8 +39,54 @@ export function formatMonthYear(year: number, month: number): string {
   return format(new Date(year, month, 1), "MMMM yyyy");
 }
 
-export function formatDateKey(date: Date): string {
-  return format(date, "yyyy-MM-dd");
+/**
+ * Get the current "tracking date" based on 5 AM cutoff.
+ * If current time is before 5 AM, return yesterday's date.
+ * Otherwise, return today's date.
+ * Uses local timezone to avoid timezone issues.
+ */
+export function getTrackingDate(): Date {
+  const now = new Date();
+  const currentHour = now.getHours();
+  
+  // If it's before 5 AM, use yesterday's date
+  if (currentHour < 5) {
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(0, 0, 0, 0);
+    return yesterday;
+  }
+  
+  // Otherwise, use today's date
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  return today;
+}
+
+/**
+ * Format date as YYYY-MM-DD string for consistent date key format
+ * Handles both Date objects and date strings
+ */
+export function formatDateKey(date: Date | string): string {
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  return format(dateObj, "yyyy-MM-dd");
+}
+
+/**
+ * Compare a date string (YYYY-MM-DD) with the current tracking date
+ * Returns: -1 if past, 0 if today, 1 if future
+ */
+export function compareWithTrackingDate(dateString: string): number {
+  const trackingDate = getTrackingDate();
+  const dateToCheck = new Date(dateString + 'T00:00:00'); // Use local timezone
+  dateToCheck.setHours(0, 0, 0, 0);
+  
+  const trackingTime = trackingDate.getTime();
+  const checkTime = dateToCheck.getTime();
+  
+  if (checkTime < trackingTime) return -1; // Past
+  if (checkTime > trackingTime) return 1; // Future
+  return 0; // Today
 }
 
 export function getMonthRange(startMonth: number, startYear: number, count: number): Array<{ year: number; month: number }> {

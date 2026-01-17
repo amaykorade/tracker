@@ -4,7 +4,7 @@ import { Goal, MonthData } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Trash2, Check, GripVertical } from "lucide-react";
-import { formatDateKey } from "@/lib/date-utils";
+import { formatDateKey, getTrackingDate, compareWithTrackingDate } from "@/lib/date-utils";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useSortable } from "@dnd-kit/sortable";
@@ -52,6 +52,7 @@ export function GoalItem({
   } = useSortable({ 
     id: goal.id,
     disabled: isLocked, // Disable drag for locked goals
+    animateLayoutChanges: () => true, // Always animate layout changes for smooth transitions
   });
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -151,10 +152,16 @@ export function GoalItem({
     }
   };
 
+  // Always use consistent transition timing for all items to ensure synchronized movement
+  // When dnd-kit provides a transition, use it; otherwise use a consistent default
+  const transitionStyle = transition || 'transform 200ms cubic-bezier(0.4, 0, 0.2, 1)';
+  
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    transition: transitionStyle,
     opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 50 : 1, // Ensure dragged item is on top
+    willChange: 'transform', // Optimize for GPU acceleration
   };
 
   const handleLockedAction = () => {
@@ -168,8 +175,10 @@ export function GoalItem({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "hover:shadow-md transition-shadow",
-        isDragging && "shadow-lg",
+        "hover:shadow-md",
+        // Only apply shadow transition when not being transformed
+        !transform && !isDragging && "transition-shadow duration-200 ease-in-out",
+        isDragging && "shadow-lg ring-2 ring-primary/20",
         isLocked && "opacity-60 border-dashed"
       )}
     >
@@ -248,7 +257,7 @@ export function GoalItem({
           {/* Checkboxes Row */}
           <div
             ref={scrollContainerRef}
-            className="flex-1 overflow-x-auto scroll-smooth goal-scroll-container"
+            className="flex-1 overflow-x-auto goal-scroll-container"
           >
             <div className="flex gap-1 min-w-max">
               {allDates.flatMap(({ date, isCurrentMonth, isWeekEnd, isMonthStart }, index) => {
@@ -283,14 +292,11 @@ export function GoalItem({
                   }
                 }
                 
-                // Check if date is in the future or past (only allow today)
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const dateToCheck = new Date(date);
-                dateToCheck.setHours(0, 0, 0, 0);
-                const isFutureDate = dateToCheck > today;
-                const isPastDate = dateToCheck < today;
-                const isToday = dateToCheck.getTime() === today.getTime();
+                // Check if date is in the future or past (only allow today based on 5 AM cutoff)
+                const comparison = compareWithTrackingDate(dateKey);
+                const isFutureDate = comparison > 0;
+                const isPastDate = comparison < 0;
+                const isToday = comparison === 0;
 
                 // Add the checkbox button with enhanced date visibility
                 // Disable if: not current month, future date, past date (not today), or locked

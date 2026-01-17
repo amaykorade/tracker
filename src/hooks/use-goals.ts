@@ -3,6 +3,7 @@ import { Goal, GoalCompletion } from "@/types";
 import { db } from "@/lib/firebase";
 import { useAuth } from "./use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { getTrackingDate, compareWithTrackingDate } from "@/lib/date-utils";
 import {
   collection,
   addDoc,
@@ -332,18 +333,15 @@ export function useGoals() {
         throw new Error("Authentication required");
       }
       
-      // Prevent manipulation: only allow toggling today's date
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const dateToCheck = new Date(date);
-      dateToCheck.setHours(0, 0, 0, 0);
+      // Prevent manipulation: only allow toggling today's date (based on 5 AM cutoff)
+      const comparison = compareWithTrackingDate(date);
       
-      if (dateToCheck < today) {
+      if (comparison < 0) {
         // Past date - cannot be changed
         throw new Error("Past dates cannot be changed");
       }
       
-      if (dateToCheck > today) {
+      if (comparison > 0) {
         // Future date - cannot be completed
         throw new Error("Future dates cannot be completed");
       }

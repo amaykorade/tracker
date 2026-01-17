@@ -431,7 +431,7 @@ export default function HomePage() {
                 </Link>
                 <p className="text-[11px] text-muted-foreground mt-1">
                   Upgrade and billing are handled securely inside the dashboard using Razorpay.
-                </p>
+          </p>
               </CardContent>
             </Card>
           </div>

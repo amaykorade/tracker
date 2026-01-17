@@ -9,7 +9,8 @@ import { GoalItem } from "./goal-item";
 import { DatesHeader } from "./dates-header";
 import { MotivationLine } from "./motivation-line";
 import { useMemo, useRef, useEffect } from "react";
-import { format, isSameDay } from "date-fns";
+import { format } from "date-fns";
+import { getTrackingDate, formatDateKey, compareWithTrackingDate } from "@/lib/date-utils";
 import {
   DndContext,
   closestCenter,
@@ -96,72 +97,58 @@ export function GoalList({
     onReorderGoals(active.id as string, over.id as string);
   };
 
-  // Synchronize scrolling between dates header and goal rows
+  // Synchronize scrolling between dates header and goal rows using unified approach
   const datesHeaderRef = useRef<HTMLDivElement>(null);
   const goalScrollRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const isSyncingRef = useRef(false);
-  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scrollPositionRef = useRef<number>(0);
+  const rafIdRef = useRef<number | null>(null);
 
-  const syncScroll = (scrollLeft: number, sourceRef?: HTMLDivElement) => {
+  // Unified scroll sync - updates all elements in a single frame for perfect alignment
+  const syncAllScrollPositions = (scrollLeft: number, sourceRef?: HTMLDivElement) => {
     // Prevent recursive updates
     if (isSyncingRef.current) return;
-    isSyncingRef.current = true;
+    
+    // Store the scroll position
+    scrollPositionRef.current = scrollLeft;
 
-    // Clear any pending timeout
-    if (scrollTimeoutRef.current) {
-      clearTimeout(scrollTimeoutRef.current);
+    // Cancel any pending animation frame
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
     }
 
-    // Sync dates header - temporarily disable smooth scrolling for programmatic scroll
-    if (datesHeaderRef.current && datesHeaderRef.current !== sourceRef) {
-      const wasSmooth = datesHeaderRef.current.style.scrollBehavior;
-      datesHeaderRef.current.style.scrollBehavior = 'auto';
-      datesHeaderRef.current.scrollLeft = scrollLeft;
-      // Restore smooth scrolling
-      requestAnimationFrame(() => {
-        if (datesHeaderRef.current) {
-          datesHeaderRef.current.style.scrollBehavior = wasSmooth || 'smooth';
+    // Use a single requestAnimationFrame to update all elements together
+    rafIdRef.current = requestAnimationFrame(() => {
+      isSyncingRef.current = true;
+
+      // Update dates header
+      if (datesHeaderRef.current && datesHeaderRef.current !== sourceRef) {
+        datesHeaderRef.current.scrollLeft = scrollLeft;
+      }
+      
+      // Update all goal rows in the same frame
+      goalScrollRefs.current.forEach((ref) => {
+        if (ref && ref !== sourceRef) {
+          ref.scrollLeft = scrollLeft;
         }
       });
-    }
-    
-    // Sync all goal rows - temporarily disable smooth scrolling for programmatic scroll
-    goalScrollRefs.current.forEach((ref) => {
-      if (ref && ref !== sourceRef) {
-        const wasSmooth = ref.style.scrollBehavior;
-        ref.style.scrollBehavior = 'auto';
-        ref.scrollLeft = scrollLeft;
-        // Restore smooth scrolling
-        requestAnimationFrame(() => {
-          if (ref) {
-            ref.style.scrollBehavior = wasSmooth || 'smooth';
-          }
-        });
-      }
-    });
 
-    // Reset flag after a short delay to allow smooth scrolling
-    scrollTimeoutRef.current = setTimeout(() => {
+      // Reset flag immediately after updates complete
       isSyncingRef.current = false;
-    }, 100);
+      rafIdRef.current = null;
+    });
   };
 
-  // Register goal scroll container
+  // Register goal scroll container with unified scroll handler
   const registerGoalScroll = (goalId: string, ref: HTMLDivElement | null) => {
     if (ref) {
       goalScrollRefs.current.set(goalId, ref);
       
-      // Add scroll listener with throttling
-      let ticking = false;
+      // Unified scroll handler - directly updates all elements
       const handleScrollEvent = () => {
-        if (!ticking && !isSyncingRef.current) {
-          requestAnimationFrame(() => {
-            if (!isSyncingRef.current) {
-              syncScroll(ref.scrollLeft, ref);
-            }
-            ticking = false;
-          });
-          ticking = true;
+        // Only sync if we're not already syncing (to prevent loops)
+        if (!isSyncingRef.current) {
+          syncAllScrollPositions(ref.scrollLeft, ref);
         }
       };
       
@@ -180,9 +167,11 @@ export function GoalList({
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
+      // Cancel any pending animation frame
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
       }
+      // Clean up scroll listeners
       goalScrollRefs.current.forEach((ref) => {
         if (ref && (ref as any).__scrollCleanup) {
           ref.removeEventListener("scroll", (ref as any).__scrollCleanup);
@@ -191,17 +180,15 @@ export function GoalList({
     };
   }, []);
 
-  // Jump to today's date
+  // Jump to today's date (based on 5 AM cutoff)
   const jumpToToday = () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const trackingDate = getTrackingDate();
     
     // Find today's date index in allDates
     let todayIndex = -1;
     for (let i = 0; i < allDates.length; i++) {
-      const date = new Date(allDates[i].date);
-      date.setHours(0, 0, 0, 0);
-      if (isSameDay(date, today)) {
+      const dateKey = formatDateKey(allDates[i].date);
+      if (compareWithTrackingDate(dateKey) === 0) {
         todayIndex = i;
         break;
       }
@@ -367,10 +354,10 @@ export function GoalList({
                   <div className="min-w-[200px] flex-shrink-0" />
                   <div
                     ref={datesHeaderRef}
-                    className="flex-1 overflow-x-auto scroll-smooth goal-scroll-container"
+                    className="flex-1 overflow-x-auto goal-scroll-container"
                     onScroll={(e) => {
                       if (!isSyncingRef.current) {
-                        syncScroll(e.currentTarget.scrollLeft, e.currentTarget);
+                        syncAllScrollPositions(e.currentTarget.scrollLeft, e.currentTarget);
                       }
                     }}
                   >
@@ -385,6 +372,7 @@ export function GoalList({
               sensors={sensors}
               collisionDetection={closestCenter}
               onDragEnd={handleDragEnd}
+              modifiers={[]} // Use default modifiers for smooth animations
             >
               <SortableContext
                 items={goals.map((g) => g.id)}

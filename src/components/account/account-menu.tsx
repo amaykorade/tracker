@@ -10,16 +10,21 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, User, Home, LogIn } from "lucide-react";
+import { LogOut, User, Home, LogIn, Sun, Moon, Monitor } from "lucide-react";
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { AuthDialog } from "@/components/auth/auth-dialog";
+import { useTheme } from "@/components/providers/theme-provider";
 
 export function AccountMenu() {
   const { user, logout } = useAuth();
   const { toast } = useToast();
+  const { theme, setTheme } = useTheme();
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
 
   const handleLogout = async () => {
@@ -86,6 +91,40 @@ export function AccountMenu() {
             <span>Home</span>
           </Link>
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger className="cursor-pointer">
+            <Monitor className="mr-2 h-4 w-4" />
+            <span>Theme</span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuItem
+              onClick={() => setTheme("light")}
+              className="cursor-pointer"
+            >
+              <Sun className="mr-2 h-4 w-4" />
+              <span>Light</span>
+              {theme === "light" && <span className="ml-auto text-xs">✓</span>}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => setTheme("dark")}
+              className="cursor-pointer"
+            >
+              <Moon className="mr-2 h-4 w-4" />
+              <span>Dark</span>
+              {theme === "dark" && <span className="ml-auto text-xs">✓</span>}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => setTheme("system")}
+              className="cursor-pointer"
+            >
+              <Monitor className="mr-2 h-4 w-4" />
+              <span>System</span>
+              {theme === "system" && <span className="ml-auto text-xs">✓</span>}
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuSeparator />
         {user ? (
           <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
             <LogOut className="mr-2 h-4 w-4" />
