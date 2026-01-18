@@ -42,6 +42,7 @@ interface GoalListProps {
   onAuthRequired?: () => void;
   isPro?: boolean;
   onUpgradeClick?: () => void;
+  allowPastDateEditing?: boolean;
 }
 
 export function GoalList({
@@ -395,6 +396,7 @@ export function GoalList({
                       onAuthRequired={onAuthRequired}
                       isLocked={isLocked}
                       onUpgradeClick={onUpgradeClick}
+                      allowPastDateEditing={allowPastDateEditing}
                     />
                   );
                 })}

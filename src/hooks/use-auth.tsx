@@ -70,18 +70,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const data = userDoc.data();
             const userPlan = (data.plan as "free" | "pro") ?? "free";
 
-            await setDoc(
-              userRef,
-              {
-                email: user.email,
-                displayName: user.displayName,
-                photoURL: user.photoURL,
-                lastLoginAt: Timestamp.now(),
-                // Do not overwrite existing plan unless it's missing
-                ...(data.plan ? {} : { plan: userPlan }),
-              },
-              { merge: true }
-            );
+            // Ensure allowPastDateEditing field exists (default to false if missing)
+            // Handle both boolean true and truthy values
+            const allowPastDateEditingValue = data.allowPastDateEditing === true || data.allowPastDateEditing === "true";
+
+            // Only update fields that need updating, don't touch allowPastDateEditing if it exists
+            const updateData: any = {
+              email: user.email,
+              displayName: user.displayName,
+              photoURL: user.photoURL,
+              lastLoginAt: Timestamp.now(),
+            };
+            
+            // Only add plan if it's missing
+            if (!data.plan) {
+              updateData.plan = userPlan;
+            }
+            
+            // Only add allowPastDateEditing if it doesn't exist (default to false)
+            // DO NOT overwrite if it already exists (might be true for marketing)
+            if (data.allowPastDateEditing === undefined) {
+              updateData.allowPastDateEditing = false;
+            }
+            
+            await setDoc(userRef, updateData, { merge: true });
 
             setPlan(userPlan);
             setBillingInterval(
@@ -95,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 : null
             );
             // Read allowPastDateEditing setting (defaults to false)
-            setAllowPastDateEditing(data.allowPastDateEditing === true);
+            setAllowPastDateEditing(allowPastDateEditingValue);
           }
         } catch (error) {
           console.error("Error saving user data:", error);
@@ -165,8 +177,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setPlan(nextPlan);
         setBillingInterval(nextBilling);
         setPlanExpiresAt(nextExpires);
-        // Update allowPastDateEditing from Firestore
-        setAllowPastDateEditing(data.allowPastDateEditing === true);
+        // Update allowPastDateEditing from Firestore (defaults to false if not set)
+        // Handle both boolean true and truthy values
+        const allowPastDateEditingValue = data.allowPastDateEditing === true || data.allowPastDateEditing === "true";
+        setAllowPastDateEditing(allowPastDateEditingValue);
+        
+        // Ensure allowPastDateEditing field exists in Firestore if missing
+        if (data.allowPastDateEditing === undefined) {
+          try {
+            await setDoc(
+              userRef,
+              { allowPastDateEditing: false },
+              { merge: true }
+            );
+          } catch {
+            // Ignore errors when updating field
+          }
+        }
       },
       () => {
         // On error, do not change current plan state
