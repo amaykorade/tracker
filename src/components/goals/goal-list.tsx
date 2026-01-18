@@ -59,6 +59,7 @@ export function GoalList({
   onAuthRequired,
   isPro = true,
   onUpgradeClick,
+  allowPastDateEditing = false,
 }: GoalListProps) {
   const sensors = useSensors(
     useSensor(PointerSensor),

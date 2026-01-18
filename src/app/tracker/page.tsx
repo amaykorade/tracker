@@ -21,7 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 
 export default function Home() {
-  const { user, isPro, plan } = useAuth();
+  const { user, isPro, plan, allowPastDateEditing } = useAuth();
   const { resolvedTheme } = useTheme();
   const { goals, addGoal, updateGoal, deleteGoal, toggleCompletion, isCompleted, completions, loading, reorderGoals, motivation, updateMotivation } = useGoals();
   const { toast } = useToast();
@@ -237,6 +237,7 @@ export default function Home() {
                     onAuthRequired={() => setAuthDialogOpen(true)}
                     isPro={isPro}
                     onUpgradeClick={() => setBillingDialogOpen(true)}
+                    allowPastDateEditing={allowPastDateEditing}
                     monthControls={
                       <MonthControls
                         months={months}

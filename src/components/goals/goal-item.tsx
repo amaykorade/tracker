@@ -35,6 +35,7 @@ interface GoalItemProps {
   onAuthRequired?: () => void;
   isLocked?: boolean;
   onUpgradeClick?: () => void;
+  allowPastDateEditing?: boolean;
 }
 
 export function GoalItem({
@@ -48,6 +49,7 @@ export function GoalItem({
   onAuthRequired,
   isLocked = false,
   onUpgradeClick,
+  allowPastDateEditing = false,
 }: GoalItemProps) {
   const {
     attributes,
@@ -317,8 +319,9 @@ export function GoalItem({
                 const isToday = comparison === 0;
 
                 // Add the checkbox button with enhanced date visibility
-                // Disable if: not current month, future date, past date (not today), or locked
-                const isCheckboxDisabled = !isCurrentMonth || isFutureDate || isPastDate || isLocked;
+                // Disable if: not current month, future date, past date (if not allowed), or locked
+                // If allowPastDateEditing is true, past dates are enabled
+                const isCheckboxDisabled = !isCurrentMonth || isFutureDate || (isPastDate && !allowPastDateEditing) || isLocked;
                 elements.push(
                   <button
                     key={`${dateKey}-${index}`}
@@ -327,7 +330,8 @@ export function GoalItem({
                         handleLockedAction();
                         return;
                       }
-                      if (!isCurrentMonth || isFutureDate || isPastDate) return;
+                      // Allow past dates if allowPastDateEditing is true, but always block future dates
+                      if (!isCurrentMonth || isFutureDate || (isPastDate && !allowPastDateEditing)) return;
                       // Check if auth is required
                       try {
                         await onToggleCompletion(goal.id, dateKey);
@@ -351,7 +355,7 @@ export function GoalItem({
                         ? "Upgrade to Pro to unlock this goal"
                         : isFutureDate 
                         ? "Future dates cannot be completed" 
-                        : isPastDate
+                        : isPastDate && !allowPastDateEditing
                         ? "Past dates cannot be changed"
                         : `${goal.title} - ${format(date, "MMM d, yyyy")}`
                     }

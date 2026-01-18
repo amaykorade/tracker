@@ -24,7 +24,7 @@ const LOCAL_STORAGE_MOTIVATION_KEY = "tracker_motivation";
 const LOCAL_STORAGE_DEFAULTS_ADDED_KEY = "tracker_defaults_added";
 
 export function useGoals() {
-  const { user, isPro } = useAuth();
+  const { user, isPro, allowPastDateEditing } = useAuth();
   const { toast } = useToast();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [completions, setCompletions] = useState<Map<string, GoalCompletion>>(
@@ -334,15 +334,19 @@ export function useGoals() {
       }
       
       // Prevent manipulation: only allow toggling today's date (based on 5 AM cutoff)
+      // Unless allowPastDateEditing is true (for marketing/demo purposes)
       const comparison = compareWithTrackingDate(date);
       
       if (comparison < 0) {
-        // Past date - cannot be changed
-        throw new Error("Past dates cannot be changed");
+        // Past date - check if editing is allowed
+        if (!allowPastDateEditing) {
+          throw new Error("Past dates cannot be changed");
+        }
+        // If allowPastDateEditing is true, allow past dates
       }
       
       if (comparison > 0) {
-        // Future date - cannot be completed
+        // Future date - cannot be completed (always disabled)
         throw new Error("Future dates cannot be completed");
       }
       
@@ -370,7 +374,7 @@ export function useGoals() {
         throw error;
       }
     },
-    [completions, user]
+    [completions, user, allowPastDateEditing]
   );
 
   const isCompleted = useCallback(

@@ -22,6 +22,8 @@ interface AuthContextType {
   planExpiresAt: Date | null;
   /** Convenience flag derived from plan and expiry */
   isPro: boolean;
+  /** Allow editing past dates (for marketing/demo purposes) */
+  allowPastDateEditing: boolean;
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -34,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [plan, setPlan] = useState<"free" | "pro">("free");
   const [billingInterval, setBillingInterval] = useState<"monthly" | "yearly" | null>(null);
   const [planExpiresAt, setPlanExpiresAt] = useState<Date | null>(null);
+  const [allowPastDateEditing, setAllowPastDateEditing] = useState<boolean>(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -55,10 +58,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               plan: "free",
               billingInterval: null,
               planExpiresAt: null,
+              // Default: false (only today allowed), can be set to true for marketing
+              allowPastDateEditing: false,
             });
             setPlan("free");
             setBillingInterval(null);
             setPlanExpiresAt(null);
+            setAllowPastDateEditing(false);
           } else {
             // Existing user - update last login time and sync profile data
             const data = userDoc.data();
@@ -88,6 +94,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 ? data.planExpiresAt.toDate()
                 : null
             );
+            // Read allowPastDateEditing setting (defaults to false)
+            setAllowPastDateEditing(data.allowPastDateEditing === true);
           }
         } catch (error) {
           console.error("Error saving user data:", error);
@@ -98,6 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setPlan("free");
         setBillingInterval(null);
         setPlanExpiresAt(null);
+        setAllowPastDateEditing(false);
       }
       setUser(user);
       setLoading(false);
@@ -156,6 +165,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setPlan(nextPlan);
         setBillingInterval(nextBilling);
         setPlanExpiresAt(nextExpires);
+        // Update allowPastDateEditing from Firestore
+        setAllowPastDateEditing(data.allowPastDateEditing === true);
       },
       () => {
         // On error, do not change current plan state
@@ -174,6 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         billingInterval,
         planExpiresAt,
         isPro: plan === "pro" && (!planExpiresAt || planExpiresAt.getTime() > Date.now()),
+        allowPastDateEditing,
         signInWithGoogle,
         logout,
       }}
