@@ -101,19 +101,13 @@ export function GoalList({
 
   // Centralized scroll synchronization - single source of truth
   const scrollContainersRef = useRef<HTMLDivElement[]>([]);
+  const handlersMapRef = useRef<Map<HTMLDivElement, (e: Event) => void>>(new Map());
   const isSyncingRef = useRef(false);
 
   // Register ALL scroll containers in a centralized list
   const registerScrollContainer = useCallback((ref: HTMLDivElement | null) => {
     if (ref && !scrollContainersRef.current.includes(ref)) {
       scrollContainersRef.current.push(ref);
-    }
-  }, []);
-
-  // Deregister scroll container
-  const deregisterScrollContainer = useCallback((ref: HTMLDivElement | null) => {
-    if (ref) {
-      scrollContainersRef.current = scrollContainersRef.current.filter(r => r !== ref);
     }
   }, []);
 
@@ -137,19 +131,28 @@ export function GoalList({
 
   // Global scroll event handler - attached to ALL containers
   useEffect(() => {
-    const handleScroll = (e: Event) => {
-      const container = e.target as HTMLDivElement;
-      if (!isSyncingRef.current) {
-        syncScroll(container.scrollLeft);
-      }
-    };
-
     const setupScrollListeners = () => {
+      // Clean up old listeners first
+      handlersMapRef.current.forEach((handler, container) => {
+        container.removeEventListener('scroll', handler);
+      });
+      handlersMapRef.current.clear();
+      scrollContainersRef.current = [];
+
+      // Create a single handler function for this effect cycle
+      const handleScroll = (e: Event) => {
+        const container = e.target as HTMLDivElement;
+        if (!isSyncingRef.current) {
+          syncScroll(container.scrollLeft);
+        }
+      };
+
       // Attach listener to dates header
       const datesHeader = document.querySelector('[data-scroll-container="dates"]') as HTMLDivElement;
       if (datesHeader) {
         registerScrollContainer(datesHeader);
         datesHeader.addEventListener('scroll', handleScroll, { passive: true });
+        handlersMapRef.current.set(datesHeader, handleScroll);
       }
 
       // Attach listener to all goal scroll containers
@@ -157,22 +160,24 @@ export function GoalList({
       goalContainers.forEach((container) => {
         registerScrollContainer(container);
         container.addEventListener('scroll', handleScroll, { passive: true });
+        handlersMapRef.current.set(container, handleScroll);
       });
     };
 
     setupScrollListeners();
 
     // Re-setup when goals change (new goals added)
-    const timer = setTimeout(setupScrollListeners, 100);
+    const timer = setTimeout(setupScrollListeners, 50);
 
     return () => {
       clearTimeout(timer);
       // Cleanup listeners
-      scrollContainersRef.current.forEach((container) => {
-        container.removeEventListener('scroll', handleScroll);
+      handlersMapRef.current.forEach((handler, container) => {
+        container.removeEventListener('scroll', handler);
       });
+      handlersMapRef.current.clear();
     };
-  }, [registerScrollContainer, syncScroll]);
+  }, [registerScrollContainer, syncScroll, goals.length]);
 
   // Process all dates once for all goals
   const allDates = useMemo(() => {
