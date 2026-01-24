@@ -31,7 +31,6 @@ interface GoalItemProps {
   onToggleCompletion: (goalId: string, date: string) => void;
   onDeleteGoal: (id: string) => void;
   onUpdateGoal: (id: string, title: string) => void;
-  onRegisterScroll?: (ref: HTMLDivElement | null) => void;
   onAuthRequired?: () => void;
   isLocked?: boolean;
   onUpgradeClick?: () => void;
@@ -45,7 +44,6 @@ export function GoalItem({
   onToggleCompletion,
   onDeleteGoal,
   onUpdateGoal,
-  onRegisterScroll,
   onAuthRequired,
   isLocked = false,
   onUpgradeClick,
@@ -70,17 +68,6 @@ export function GoalItem({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (onRegisterScroll && scrollContainerRef.current) {
-      onRegisterScroll(scrollContainerRef.current);
-    }
-    return () => {
-      if (onRegisterScroll) {
-        onRegisterScroll(null);
-      }
-    };
-  }, [onRegisterScroll]);
 
   // Update editedTitle when goal.title changes (from external updates)
   useEffect(() => {
@@ -202,10 +189,10 @@ export function GoalItem({
         isLocked && "opacity-60 border-dashed"
       )}
     >
-      <CardContent className="p-4">
-        <div className="flex items-start gap-4">
+      <CardContent className="p-2 sm:p-4">
+        <div className="flex items-start gap-2 sm:gap-4">
           {/* Drag Handle and Goal Title */}
-          <div className="flex items-center gap-2 w-[200px] flex-shrink-0">
+          <div className="flex items-center gap-2 w-[120px] sm:w-[200px] flex-shrink-0">
             {isLocked ? (
               <div className="p-1 flex-shrink-0">
                 <svg className="h-5 w-5 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -277,6 +264,7 @@ export function GoalItem({
           {/* Checkboxes Row */}
           <div
             ref={scrollContainerRef}
+            data-scroll-container="goal"
             className="flex-1 overflow-x-auto goal-scroll-container"
           >
             <div className="flex gap-1 min-w-max">
@@ -343,10 +331,10 @@ export function GoalItem({
                     }}
                     disabled={isCheckboxDisabled}
                     className={cn(
-                      "w-10 h-10 border rounded flex flex-col items-center justify-center transition-all flex-shrink-0 group relative",
+                      "w-8 h-8 sm:w-10 sm:h-10 border rounded flex flex-col items-center justify-center transition-all flex-shrink-0 group relative touch-manipulation",
                       completed
                         ? "bg-green-500 border-green-600 text-white"
-                        : "bg-background border-input hover:bg-accent",
+                        : "bg-background border-input hover:bg-accent active:bg-accent",
                       isCheckboxDisabled && "cursor-not-allowed opacity-50",
                       isLocked && "opacity-30"
                     )}
@@ -360,7 +348,7 @@ export function GoalItem({
                         : `${goal.title} - ${format(date, "MMM d, yyyy")}`
                     }
                   >
-                    {completed && <Check className="h-4 w-4" />}
+                    {completed && <Check className="h-3 w-3 sm:h-4 sm:w-4" />}
                     {/* Show date on hover for better visibility (only for today) */}
                     {isToday && !isLocked && (
                       <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-foreground text-background text-[10px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-20">

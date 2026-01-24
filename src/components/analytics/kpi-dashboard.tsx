@@ -22,6 +22,7 @@ import {
 import { format, subDays, eachDayOfInterval, startOfWeek, endOfWeek, eachWeekOfInterval, getDay, startOfMonth, endOfMonth, eachMonthOfInterval, isSameMonth, isSameDay, startOfYear, endOfYear, subMonths } from "date-fns";
 import { formatDateKey } from "@/lib/date-utils";
 import { Calendar, Filter } from "lucide-react";
+// import { ShareProgress } from "@/components/share/share-progress";
 
 interface KPIDashboardProps {
   goals: Goal[];
@@ -329,13 +330,46 @@ export function KPIDashboard({
     "#8884d8",
   ];
 
+  // Format date range string for sharing
+  const dateRangeString = useMemo(() => {
+    if (dateRange === "all") {
+      return `All Time (${format(startDate, "MMM d, yyyy")} - ${format(endDate, "MMM d, yyyy")})`;
+    } else if (dateRange === "7days") {
+      return "Last 7 Days";
+    } else if (dateRange === "30days") {
+      return "Last 30 Days";
+    } else if (dateRange === "3months") {
+      return "Last 3 Months";
+    } else if (dateRange === "year") {
+      return `This Year (${format(startDate, "yyyy")})`;
+    } else if (dateRange === "custom" && customStartDate && customEndDate) {
+      return `${format(new Date(customStartDate), "MMM d, yyyy")} - ${format(new Date(customEndDate), "MMM d, yyyy")}`;
+    } else {
+      return format(startDate, "MMM d, yyyy");
+    }
+  }, [dateRange, startDate, endDate, customStartDate, customEndDate]);
+
   return (
     <div className="space-y-6">
+      {/* Share Progress Button - Disabled for now */}
+      {/* <div className="flex justify-end mb-4">
+        <ShareProgress
+          goals={goals}
+          completionRate={completionRate}
+          currentStreak={currentStreak}
+          longestStreak={longestStreak}
+          consistencyScore={consistencyScore}
+          totalCompletions={totalCompletions}
+          totalDays={totalDays}
+          dateRange={dateRangeString}
+        />
+      </div> */}
+
       {/* Free plan limitation notice */}
       {!isPro && (
         <Card className="border-primary/20 bg-primary/5">
           <CardContent className="p-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium mb-1">Current Month Analytics Only</p>
                 <p className="text-xs text-muted-foreground">
@@ -343,7 +377,7 @@ export function KPIDashboard({
                 </p>
               </div>
               {onUpgradeClick && (
-                <Button size="sm" onClick={onUpgradeClick} className="ml-4">
+                <Button size="sm" onClick={onUpgradeClick} className="w-full sm:w-auto">
                   Upgrade to Pro
                 </Button>
               )}
@@ -445,7 +479,7 @@ export function KPIDashboard({
           </CardContent>
         </Card>
       )}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">

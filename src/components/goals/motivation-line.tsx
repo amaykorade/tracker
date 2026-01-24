@@ -47,31 +47,33 @@ export function MotivationLine({ motivation, onUpdate }: MotivationLineProps) {
 
   if (isEditing) {
     return (
-      <div className="flex items-center gap-2 flex-1">
+      <div className="flex items-center gap-2 flex-1 flex-wrap sm:flex-nowrap">
         <Input
           ref={inputRef}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Enter your motivation..."
-          className="flex-1"
+          className="flex-1 min-w-0 text-sm sm:text-base"
         />
-        <Button size="icon" variant="ghost" onClick={handleSave} className="h-8 w-8">
-          <Check className="h-4 w-4" />
-        </Button>
-        <Button size="icon" variant="ghost" onClick={handleCancel} className="h-8 w-8">
-          <X className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button size="icon" variant="ghost" onClick={handleSave} className="h-8 w-8 flex-shrink-0 touch-manipulation">
+            <Check className="h-4 w-4" />
+          </Button>
+          <Button size="icon" variant="ghost" onClick={handleCancel} className="h-8 w-8 flex-shrink-0 touch-manipulation">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex items-center gap-2 flex-1 group">
+    <div className="flex items-center gap-2 flex-1 group min-w-0">
       {motivation ? (
-        <p className="text-lg font-medium text-foreground flex-1">{motivation}</p>
+        <p className="text-sm sm:text-lg font-medium text-foreground flex-1 min-w-0 break-words">{motivation}</p>
       ) : (
-        <p className="text-lg font-medium text-muted-foreground flex-1 italic">
+        <p className="text-sm sm:text-lg font-medium text-muted-foreground flex-1 italic min-w-0 break-words">
           Click to add your motivation...
         </p>
       )}
@@ -79,7 +81,7 @@ export function MotivationLine({ motivation, onUpdate }: MotivationLineProps) {
         size="icon"
         variant="ghost"
         onClick={() => setIsEditing(true)}
-        className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+        className="h-8 w-8 flex-shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity touch-manipulation"
       >
         <Edit2 className="h-4 w-4" />
       </Button>

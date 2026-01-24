@@ -97,19 +97,19 @@ export function DatesHeader({ months }: DatesHeaderProps) {
             elements.push(
               <div
                 key={`month-label-${index}`}
-                className="w-10 text-center flex-shrink-0"
+                className="w-8 sm:w-10 text-center flex-shrink-0"
               >
-                <div className="text-[10px] font-semibold text-primary leading-tight">
+                <div className="text-[9px] sm:text-[10px] font-semibold text-primary leading-tight">
                   {format(date, "MMM")}
                 </div>
-                <div className="text-[9px] text-muted-foreground leading-tight">
+                <div className="text-[8px] sm:text-[9px] text-muted-foreground leading-tight">
                   {format(date, "yy")}
                 </div>
               </div>
             );
           } else {
             // Empty spacer for other days
-            elements.push(<div key={`month-spacer-${index}`} className="w-10 flex-shrink-0" />);
+            elements.push(<div key={`month-spacer-${index}`} className="w-8 sm:w-10 flex-shrink-0" />);
           }
           
           return elements;
@@ -151,18 +151,18 @@ export function DatesHeader({ months }: DatesHeaderProps) {
           
           // Add the date element - must match checkbox width exactly
           elements.push(
-            <div
-              key={`${dateKey}-${index}`}
-              className={cn(
-                "w-10 h-10 text-center flex flex-col items-center justify-center relative flex-shrink-0",
-                !isCurrentMonth && "opacity-30"
-              )}
-            >
-              <div className="text-xs font-medium text-muted-foreground">
-                {format(date, "EEE")}
+              <div
+                key={`${dateKey}-${index}`}
+                className={cn(
+                  "w-8 h-8 sm:w-10 sm:h-10 text-center flex flex-col items-center justify-center relative flex-shrink-0",
+                  !isCurrentMonth && "opacity-30"
+                )}
+              >
+                <div className="text-[10px] sm:text-xs font-medium text-muted-foreground">
+                  {format(date, "EEE")}
+                </div>
+                <div className="text-[10px] sm:text-xs">{format(date, "d")}</div>
               </div>
-              <div className="text-xs">{format(date, "d")}</div>
-            </div>
           );
           
           return elements;

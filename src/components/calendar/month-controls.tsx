@@ -22,17 +22,17 @@ export function MonthControls({
   const lastMonth = months[months.length - 1];
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
       <Button
         size="sm"
         variant="ghost"
         onClick={() => onScroll("left")}
-        className="h-8 w-8 p-0"
+        className="h-8 w-8 p-0 touch-manipulation"
         title="Scroll left"
       >
         <ChevronLeft className="h-4 w-4" />
       </Button>
-      <span className="text-xs text-muted-foreground whitespace-nowrap">
+      <span className="text-[10px] sm:text-xs text-muted-foreground whitespace-nowrap px-1">
         {format(new Date(firstMonth.year, firstMonth.month, 1), "MMM yyyy")} -{" "}
         {format(new Date(lastMonth.year, lastMonth.month, 1), "MMM yyyy")}
       </span>
@@ -40,14 +40,14 @@ export function MonthControls({
         size="sm"
         variant="ghost"
         onClick={() => onScroll("right")}
-        className="h-8 w-8 p-0"
+        className="h-8 w-8 p-0 touch-manipulation"
         title="Scroll right"
       >
         <ChevronRight className="h-4 w-4" />
       </Button>
-      <Button size="sm" variant="outline" onClick={onAddMonth} className="h-8">
+      <Button size="sm" variant="outline" onClick={onAddMonth} className="h-8 text-xs">
         <Plus className="h-3 w-3 mr-1" />
-        <span className="text-xs">Month</span>
+        <span className="hidden sm:inline">Month</span>
       </Button>
     </div>
   );

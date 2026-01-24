@@ -8,7 +8,7 @@ import { AddGoalDialog } from "./add-goal-dialog";
 import { GoalItem } from "./goal-item";
 import { DatesHeader } from "./dates-header";
 import { MotivationLine } from "./motivation-line";
-import { useMemo, useRef, useEffect } from "react";
+import { useMemo, useRef, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { getTrackingDate, formatDateKey, compareWithTrackingDate } from "@/lib/date-utils";
 import {
@@ -99,169 +99,81 @@ export function GoalList({
     onReorderGoals(active.id as string, over.id as string);
   };
 
-  // Synchronize scrolling between dates header and goal rows using unified approach
-  const datesHeaderRef = useRef<HTMLDivElement>(null);
-  const goalScrollRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  // Centralized scroll synchronization - single source of truth
+  const scrollContainersRef = useRef<HTMLDivElement[]>([]);
   const isSyncingRef = useRef(false);
-  const scrollPositionRef = useRef<number>(0);
-  const rafIdRef = useRef<number | null>(null);
 
-  // Unified scroll sync - updates all elements in a single frame for perfect alignment
-  const syncAllScrollPositions = (scrollLeft: number, sourceRef?: HTMLDivElement) => {
-    // Prevent recursive updates
-    if (isSyncingRef.current) return;
-    
-    // Store the scroll position
-    scrollPositionRef.current = scrollLeft;
-
-    // Cancel any pending animation frame
-    if (rafIdRef.current !== null) {
-      cancelAnimationFrame(rafIdRef.current);
+  // Register ALL scroll containers in a centralized list
+  const registerScrollContainer = useCallback((ref: HTMLDivElement | null) => {
+    if (ref && !scrollContainersRef.current.includes(ref)) {
+      scrollContainersRef.current.push(ref);
     }
-
-    // Use a single requestAnimationFrame to update all elements together
-    rafIdRef.current = requestAnimationFrame(() => {
-      isSyncingRef.current = true;
-
-      // Update dates header
-      if (datesHeaderRef.current && datesHeaderRef.current !== sourceRef) {
-        datesHeaderRef.current.scrollLeft = scrollLeft;
-      }
-      
-      // Update all goal rows in the same frame
-      goalScrollRefs.current.forEach((ref) => {
-        if (ref && ref !== sourceRef) {
-          ref.scrollLeft = scrollLeft;
-        }
-      });
-
-      // Reset flag immediately after updates complete
-      isSyncingRef.current = false;
-      rafIdRef.current = null;
-    });
-  };
-
-  // Register goal scroll container with unified scroll handler
-  const registerGoalScroll = (goalId: string, ref: HTMLDivElement | null) => {
-    if (ref) {
-      goalScrollRefs.current.set(goalId, ref);
-      
-      // Unified scroll handler - directly updates all elements
-      const handleScrollEvent = () => {
-        // Only sync if we're not already syncing (to prevent loops)
-        if (!isSyncingRef.current) {
-          syncAllScrollPositions(ref.scrollLeft, ref);
-        }
-      };
-      
-      ref.addEventListener("scroll", handleScrollEvent, { passive: true });
-      // Store cleanup function
-      (ref as any).__scrollCleanup = handleScrollEvent;
-    } else {
-      const oldRef = goalScrollRefs.current.get(goalId);
-      if (oldRef && (oldRef as any).__scrollCleanup) {
-        oldRef.removeEventListener("scroll", (oldRef as any).__scrollCleanup);
-      }
-      goalScrollRefs.current.delete(goalId);
-    }
-  };
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      // Cancel any pending animation frame
-      if (rafIdRef.current !== null) {
-        cancelAnimationFrame(rafIdRef.current);
-      }
-      // Clean up scroll listeners
-      goalScrollRefs.current.forEach((ref) => {
-        if (ref && (ref as any).__scrollCleanup) {
-          ref.removeEventListener("scroll", (ref as any).__scrollCleanup);
-        }
-      });
-    };
   }, []);
 
-  // Jump to today's date (based on 5 AM cutoff)
-  const jumpToToday = () => {
-    const trackingDate = getTrackingDate();
-    
-    // Find today's date index in allDates
-    let todayIndex = -1;
-    for (let i = 0; i < allDates.length; i++) {
-      const dateKey = formatDateKey(allDates[i].date);
-      if (compareWithTrackingDate(dateKey) === 0) {
-        todayIndex = i;
-        break;
-      }
+  // Deregister scroll container
+  const deregisterScrollContainer = useCallback((ref: HTMLDivElement | null) => {
+    if (ref) {
+      scrollContainersRef.current = scrollContainersRef.current.filter(r => r !== ref);
     }
+  }, []);
 
-    if (todayIndex === -1) {
-      // Today's date not found in the visible months, scroll to end
-      return;
-    }
+  // Single unified scroll sync function - syncs ALL containers
+  const syncScroll = useCallback((scrollLeft: number) => {
+    if (isSyncingRef.current) return;
 
-    // Calculate scroll position
-    // Each date box is w-10 (40px) + gap-1 (4px) = 44px
-    // Separators: month separator = w-2 (8px) + mx-1.5 (12px) = 20px, week separator = w-1 (4px) + mx-1 (8px) = 12px
-    let scrollPosition = 0;
-    const dateWidth = 44; // w-10 + gap-1
-    const monthSeparatorWidth = 20; // w-2 + mx-1.5
-    const weekSeparatorWidth = 12; // w-1 + mx-1
-
-    // Calculate position for all dates before today
-    for (let i = 0; i < todayIndex; i++) {
-      const dateInfo = allDates[i];
-      const nextDate = allDates[i + 1];
+    try {
+      isSyncingRef.current = true;
       
-      // Month separator appears BEFORE the first date of a new month
-      if (dateInfo.isMonthStart) {
-        scrollPosition += monthSeparatorWidth;
-      }
-      
-      // Add the date width
-      scrollPosition += dateWidth;
-      
-      // Week separator appears AFTER Saturday (if next date is not a month start)
-      if (dateInfo.isWeekEnd && (!nextDate || !nextDate.isMonthStart)) {
-        scrollPosition += weekSeparatorWidth;
-      }
-    }
-    
-    // Add month separator for today if it's a month start (appears before today's date)
-    if (allDates[todayIndex]?.isMonthStart) {
-      scrollPosition += monthSeparatorWidth;
-    }
-
-    // Center today's date in view (subtract half viewport width)
-    const scrollContainer = datesHeaderRef.current;
-    if (scrollContainer) {
-      const viewportWidth = scrollContainer.clientWidth;
-      const centeredPosition = Math.max(0, scrollPosition - viewportWidth / 2 + dateWidth / 2);
-      
-      // Temporarily disable smooth scrolling for instant jump
-      scrollContainer.style.scrollBehavior = 'auto';
-      scrollContainer.scrollLeft = centeredPosition;
-      
-      // Sync all other containers
-      goalScrollRefs.current.forEach((ref) => {
-        if (ref) {
-          ref.style.scrollBehavior = 'auto';
-          ref.scrollLeft = centeredPosition;
+      // Update all registered scroll containers at once
+      scrollContainersRef.current.forEach((container) => {
+        if (container && container.scrollLeft !== scrollLeft) {
+          container.scrollLeft = scrollLeft;
         }
       });
-
-      // Restore smooth scrolling
-      setTimeout(() => {
-        scrollContainer.style.scrollBehavior = 'smooth';
-        goalScrollRefs.current.forEach((ref) => {
-          if (ref) {
-            ref.style.scrollBehavior = 'smooth';
-          }
-        });
-      }, 100);
+    } finally {
+      isSyncingRef.current = false;
     }
-  };
+  }, []);
+
+  // Global scroll event handler - attached to ALL containers
+  useEffect(() => {
+    const handleScroll = (e: Event) => {
+      const container = e.target as HTMLDivElement;
+      if (!isSyncingRef.current) {
+        syncScroll(container.scrollLeft);
+      }
+    };
+
+    const setupScrollListeners = () => {
+      // Attach listener to dates header
+      const datesHeader = document.querySelector('[data-scroll-container="dates"]') as HTMLDivElement;
+      if (datesHeader) {
+        registerScrollContainer(datesHeader);
+        datesHeader.addEventListener('scroll', handleScroll, { passive: true });
+      }
+
+      // Attach listener to all goal scroll containers
+      const goalContainers = document.querySelectorAll('[data-scroll-container="goal"]') as NodeListOf<HTMLDivElement>;
+      goalContainers.forEach((container) => {
+        registerScrollContainer(container);
+        container.addEventListener('scroll', handleScroll, { passive: true });
+      });
+    };
+
+    setupScrollListeners();
+
+    // Re-setup when goals change (new goals added)
+    const timer = setTimeout(setupScrollListeners, 100);
+
+    return () => {
+      clearTimeout(timer);
+      // Cleanup listeners
+      scrollContainersRef.current.forEach((container) => {
+        container.removeEventListener('scroll', handleScroll);
+      });
+    };
+  }, [registerScrollContainer, syncScroll]);
+
   // Process all dates once for all goals
   const allDates = useMemo(() => {
     const dates: Array<{ 
@@ -312,27 +224,101 @@ export function GoalList({
     return dates;
   }, [months]);
 
+  // Jump to today's date (based on 5 AM cutoff)
+  const jumpToToday = useCallback(() => {
+    const trackingDate = getTrackingDate();
+    
+    // Find today's date index in allDates
+    let todayIndex = -1;
+    for (let i = 0; i < allDates.length; i++) {
+      const dateKey = formatDateKey(allDates[i].date);
+      if (compareWithTrackingDate(dateKey) === 0) {
+        todayIndex = i;
+        break;
+      }
+    }
+
+    if (todayIndex === -1) {
+      // Today's date not found in the visible months, scroll to end
+      return;
+    }
+
+    // Calculate scroll position
+    // Date box width: w-8 (32px) on mobile, w-10 (40px) on desktop + gap-1 (4px) = 36px mobile, 44px desktop
+    // Separators: month separator = w-2 (8px) + mx-1.5 (12px) = 20px, week separator = w-1 (4px) + mx-1 (8px) = 12px
+    let scrollPosition = 0;
+    // Use responsive width - check if mobile by checking if dates header exists and its width
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 640; // sm breakpoint
+    const dateWidth = isMobile ? 36 : 44; // w-8 + gap-1 on mobile, w-10 + gap-1 on desktop
+    const monthSeparatorWidth = 20; // w-2 + mx-1.5
+    const weekSeparatorWidth = 12; // w-1 + mx-1
+
+    // Calculate position for all dates before today
+    for (let i = 0; i < todayIndex; i++) {
+      const dateInfo = allDates[i];
+      const nextDate = allDates[i + 1];
+      
+      // Month separator appears BEFORE the first date of a new month
+      if (dateInfo.isMonthStart) {
+        scrollPosition += monthSeparatorWidth;
+      }
+      
+      // Add the date width
+      scrollPosition += dateWidth;
+      
+      // Week separator appears AFTER Saturday (if next date is not a month start)
+      if (dateInfo.isWeekEnd && (!nextDate || !nextDate.isMonthStart)) {
+        scrollPosition += weekSeparatorWidth;
+      }
+    }
+    
+    // Add month separator for today if it's a month start (appears before today's date)
+    if (allDates[todayIndex]?.isMonthStart) {
+      scrollPosition += monthSeparatorWidth;
+    }
+
+    // Sync all scroll containers to today's position
+    syncScroll(scrollPosition);
+  }, [allDates, syncScroll]);
+
+  // Auto-scroll to today on initial load
+  const hasAutoScrolledRef = useRef(false);
+  useEffect(() => {
+    // Only auto-scroll once when goals and dates are available
+    if (!hasAutoScrolledRef.current && goals.length > 0 && allDates.length > 0) {
+      // Small delay to ensure DOM is ready and scroll containers are registered
+      const timer = setTimeout(() => {
+        jumpToToday();
+        hasAutoScrolledRef.current = true;
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [goals.length, allDates.length, jumpToToday]);
+
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between mb-3 gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-3 sm:gap-4">
         {motivation !== undefined && onUpdateMotivation ? (
-          <MotivationLine motivation={motivation} onUpdate={onUpdateMotivation} />
+          <div className="w-full sm:flex-1 min-w-0">
+            <MotivationLine motivation={motivation} onUpdate={onUpdateMotivation} />
+          </div>
         ) : (
-          <div className="flex-1" />
+          <div className="flex-1 hidden sm:block" />
         )}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
           {monthControls && <div className="flex items-center">{monthControls}</div>}
           <Button
             size="sm"
             variant="outline"
             onClick={jumpToToday}
             title="Jump to today's date"
+            className="flex-1 sm:flex-none touch-manipulation"
           >
             <Calendar className="h-4 w-4 mr-2" />
             Today
           </Button>
           <AddGoalDialog onAddGoal={onAddGoal}>
-            <Button size="sm" variant="default">
+            <Button size="sm" variant="default" className="flex-1 sm:flex-none touch-manipulation">
               <Plus className="h-4 w-4 mr-2" />
               Add Goal
             </Button>
@@ -351,17 +337,12 @@ export function GoalList({
           <div className="space-y-2">
             {/* Shared Dates Header - Sticky and Synchronized */}
             <div className="pb-1.5 border-b sticky top-0 bg-background z-10 shadow-sm">
-              <div className="p-4">
-                <div className="flex items-start gap-4">
-                  <div className="min-w-[200px] flex-shrink-0" />
+              <div className="p-2 sm:p-4">
+                <div className="flex items-start gap-2 sm:gap-4">
+                  <div className="min-w-[120px] sm:min-w-[200px] flex-shrink-0" />
                   <div
-                    ref={datesHeaderRef}
+                    data-scroll-container="dates"
                     className="flex-1 overflow-x-auto goal-scroll-container"
-                    onScroll={(e) => {
-                      if (!isSyncingRef.current) {
-                        syncAllScrollPositions(e.currentTarget.scrollLeft, e.currentTarget);
-                      }
-                    }}
                   >
                     <DatesHeader months={months} />
                   </div>
@@ -392,7 +373,6 @@ export function GoalList({
                       onToggleCompletion={onToggleCompletion}
                       onUpdateGoal={onUpdateGoal}
                       onDeleteGoal={onDeleteGoal}
-                      onRegisterScroll={(ref) => registerGoalScroll(goal.id, ref)}
                       onAuthRequired={onAuthRequired}
                       isLocked={isLocked}
                       onUpgradeClick={onUpgradeClick}

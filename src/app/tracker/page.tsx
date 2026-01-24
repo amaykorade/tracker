@@ -16,7 +16,7 @@ import { BarChart3 } from "lucide-react";
 import type { MonthData } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { db } from "@/lib/firebase";
-import { doc, setDoc, Timestamp } from "firebase/firestore";
+import { doc, setDoc, getDoc, Timestamp } from "firebase/firestore";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
@@ -25,6 +25,7 @@ export default function Home() {
   const { resolvedTheme } = useTheme();
   const { goals, addGoal, updateGoal, deleteGoal, toggleCompletion, isCompleted, completions, loading, reorderGoals, motivation, updateMotivation } = useGoals();
   const { toast } = useToast();
+  
   const [months, setMonths] = useState<Array<{ year: number; month: number }>>(() => {
     const now = new Date();
     return [{ year: now.getFullYear(), month: now.getMonth() }];
@@ -32,6 +33,40 @@ export default function Home() {
   const [monthData, setMonthData] = useState<MonthData[]>([]);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [billingDialogOpen, setBillingDialogOpen] = useState(false);
+  const [loadingMonths, setLoadingMonths] = useState(true);
+  
+  // Load months from Firestore when user changes
+  useEffect(() => {
+    const loadMonths = async () => {
+      if (!user) {
+        setLoadingMonths(false);
+        return;
+      }
+      
+      try {
+        const userRef = doc(db, "users", user.uid);
+        const userDoc = await getDoc(userRef);
+        
+        if (userDoc.exists() && userDoc.data().months) {
+          setMonths(userDoc.data().months);
+        } else {
+          // Initialize with current month for new users
+          const now = new Date();
+          const defaultMonths = [{ year: now.getFullYear(), month: now.getMonth() }];
+          setMonths(defaultMonths);
+          
+          // Save to Firestore
+          await setDoc(userRef, { months: defaultMonths }, { merge: true });
+        }
+      } catch (error) {
+        console.error("Error loading months:", error);
+      } finally {
+        setLoadingMonths(false);
+      }
+    };
+    
+    loadMonths();
+  }, [user]);
   
   // Generate month data whenever months change
   useEffect(() => {
@@ -39,7 +74,7 @@ export default function Home() {
     setMonthData(data);
   }, [months]);
 
-  const handleAddMonth = () => {
+  const handleAddMonth = async () => {
     // Free plan: only allow tracking the current month
     if (!isPro && months.length >= 1) {
       toast({
@@ -51,7 +86,24 @@ export default function Home() {
 
     const lastMonth = months[months.length - 1];
     const nextMonth = new Date(lastMonth.year, lastMonth.month + 1, 1);
-    setMonths([...months, { year: nextMonth.getFullYear(), month: nextMonth.getMonth() }]);
+    const newMonths = [...months, { year: nextMonth.getFullYear(), month: nextMonth.getMonth() }];
+    
+    setMonths(newMonths);
+    
+    // Save to Firestore
+    if (user) {
+      try {
+        const userRef = doc(db, "users", user.uid);
+        await setDoc(userRef, { months: newMonths }, { merge: true });
+      } catch (error) {
+        console.error("Error saving months:", error);
+        toast({
+          title: "Error",
+          description: "Failed to save month. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }
   };
 
   const handleScroll = (direction: "left" | "right") => {
@@ -185,19 +237,20 @@ export default function Home() {
   return (
     <div className="h-screen bg-background overflow-hidden flex flex-col">
       <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex-1 overflow-hidden p-6">
+        <div className="flex-1 overflow-hidden p-3 sm:p-6">
           <Tabs defaultValue="tracker" className="h-full flex flex-col">
-            <div className="flex-shrink-0 mb-4 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <TabsList>
-                  <TabsTrigger value="tracker">Tracker</TabsTrigger>
-                  <TabsTrigger value="analytics">
+            <div className="flex-shrink-0 mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
+                <TabsList className="w-full sm:w-auto">
+                  <TabsTrigger value="tracker" className="flex-1 sm:flex-none">Tracker</TabsTrigger>
+                  <TabsTrigger value="analytics" className="flex-1 sm:flex-none">
                     <BarChart3 className="h-4 w-4 mr-2" />
-                    Analytics
+                    <span className="hidden sm:inline">Analytics</span>
+                    <span className="sm:hidden">Stats</span>
                   </TabsTrigger>
                 </TabsList>
                 {/* Simple plan indicator + upgrade button */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs px-2 py-1 rounded-full border text-muted-foreground">
                     {isPro ? "Pro plan" : "Free plan"}
                   </span>
@@ -205,7 +258,7 @@ export default function Home() {
                     <button
                       type="button"
                       onClick={() => setBillingDialogOpen(true)}
-                      className="text-xs px-3 py-1 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                      className="text-xs px-3 py-1 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors touch-manipulation"
                     >
                       Upgrade to Pro
                     </button>
@@ -217,8 +270,8 @@ export default function Home() {
 
             <TabsContent value="tracker" className="flex-1 overflow-hidden m-0">
               <Card className="h-full">
-                <CardContent className="p-4 h-full">
-                  {loading ? (
+                <CardContent className="p-2 sm:p-4 h-full">
+                  {loading || loadingMonths ? (
                     <div className="flex items-center justify-center h-full">
                       <div className="text-muted-foreground">Loading...</div>
                     </div>
