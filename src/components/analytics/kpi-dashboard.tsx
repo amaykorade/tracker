@@ -565,26 +565,64 @@ export function KPIDashboard({
         <Card>
           <CardHeader>
             <CardTitle>Daily Completion Trend</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Track your daily progress over time
+            </p>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={dailyData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="completed"
-                  stroke="#8884d8"
-                  name="Completed"
+            <ResponsiveContainer width="100%" height={320}>
+              <LineChart data={dailyData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
+                <XAxis 
+                  dataKey="date" 
+                  stroke="#6b7280"
+                  tick={{ fontSize: 11 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                />
+                <YAxis 
+                  stroke="#6b7280"
+                  tick={{ fontSize: 11 }}
+                  domain={[0, 'dataMax + 1']}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                  }}
+                  formatter={(value: number | undefined, name?: string) => {
+                    if (value === undefined) return '0';
+                    if (name === 'completed') return [`${value} goals`, 'Completed'];
+                    if (name === 'total') return [`${value} goals`, 'Total Goals'];
+                    return value;
+                  }}
+                />
+                <Legend 
+                  wrapperStyle={{ paddingTop: '20px' }}
+                  iconType="line"
                 />
                 <Line
                   type="monotone"
+                  strokeWidth={3}
+                  dataKey="completed"
+                  stroke="#3b82f6"
+                  name="Completed"
+                  dot={{ fill: '#3b82f6', r: 4 }}
+                  activeDot={{ r: 6 }}
+                />
+                <Line
+                  type="monotone"
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
                   dataKey="total"
-                  stroke="#82ca9d"
+                  stroke="#10b981"
                   name="Total Goals"
+                  dot={{ fill: '#10b981', r: 3 }}
+                  activeDot={{ r: 5 }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -593,35 +631,160 @@ export function KPIDashboard({
 
         <Card>
           <CardHeader>
-            <CardTitle>Goal Performance</CardTitle>
+            <CardTitle>Goal Completion Distribution</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Completion rate and performance by goal
+            </p>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={goalData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="completed" fill="#8884d8" name="Completed Days" />
-              </BarChart>
-            </ResponsiveContainer>
+            <div className="space-y-4">
+              {/* Horizontal Bar Chart for better readability */}
+              <ResponsiveContainer width="100%" height={Math.max(300, goalCompletionData.length * 60)}>
+                <BarChart 
+                  data={[...goalCompletionData].sort((a, b) => b.value - a.value)} 
+                  layout="vertical"
+                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
+                  <XAxis 
+                    type="number" 
+                    domain={[0, 100]}
+                    tickFormatter={(value) => `${value}%`}
+                    stroke="#6b7280"
+                    tick={{ fontSize: 11 }}
+                  />
+                  <YAxis 
+                    type="category" 
+                    dataKey="name" 
+                    width={120}
+                    tick={{ fontSize: 12 }}
+                    stroke="#6b7280"
+                  />
+                  <Tooltip 
+                    formatter={(value: number | undefined) => {
+                      if (value === undefined) return '0%';
+                      return `${value.toFixed(1)}%`;
+                    }}
+                    labelFormatter={(label) => {
+                      const data = [...goalCompletionData].sort((a, b) => b.value - a.value).find(d => d.name === label);
+                      if (!data) return label;
+                      return `${data.name} - ${data.completed}/${data.total} days`;
+                    }}
+                    contentStyle={{ 
+                      backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      padding: '12px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                    }}
+                  />
+                  <Bar 
+                    dataKey="value" 
+                    radius={[0, 8, 8, 0]}
+                  >
+                    {[...goalCompletionData].sort((a, b) => b.value - a.value).map((entry, index) => {
+                      // Use gradient colors based on completion rate
+                      const completionRate = entry.value;
+                      let fillColor = '#3b82f6';
+                      
+                      // Adjust color intensity based on completion rate
+                      if (completionRate >= 80) {
+                        fillColor = '#10b981'; // Green for high completion
+                      } else if (completionRate >= 50) {
+                        fillColor = '#eab308'; // Yellow for medium completion
+                      } else if (completionRate >= 25) {
+                        fillColor = '#f97316'; // Orange for low completion
+                      } else {
+                        fillColor = '#ef4444'; // Red for very low completion
+                      }
+                      
+                      return <Cell key={`cell-${index}`} fill={fillColor} />;
+                    })}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+              
+              {/* Summary Statistics */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t">
+                {[...goalCompletionData]
+                  .sort((a, b) => b.value - a.value)
+                  .slice(0, 4)
+                  .map((goal, index) => (
+                    <div key={goal.name} className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className="w-3 h-3 rounded-full"
+                          style={{ 
+                            backgroundColor: goal.value >= 80 ? '#10b981' : 
+                                            goal.value >= 50 ? '#eab308' : 
+                                            goal.value >= 25 ? '#f97316' : '#ef4444'
+                          }}
+                        />
+                        <span className="text-xs font-medium truncate">{goal.name}</span>
+                      </div>
+                      <div className="text-lg font-bold">{goal.value.toFixed(0)}%</div>
+                      <div className="text-xs text-muted-foreground">
+                        {goal.completed}/{goal.total} days
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
             <CardTitle>Completion by Day of Week</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Identify your most productive days
+            </p>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={dayOfWeekData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip formatter={(value: number | undefined) => value !== undefined ? `${value.toFixed(1)}%` : '0%'} />
+            <ResponsiveContainer width="100%" height={320}>
+              <BarChart data={dayOfWeekData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
+                <XAxis 
+                  dataKey="name" 
+                  stroke="#6b7280"
+                  tick={{ fontSize: 12 }}
+                />
+                <YAxis 
+                  stroke="#6b7280"
+                  tick={{ fontSize: 11 }}
+                  domain={[0, 100]}
+                  tickFormatter={(value) => `${value}%`}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                  }}
+                  formatter={(value: number | undefined) => {
+                    if (value === undefined) return '0%';
+                    return `${value.toFixed(1)}%`;
+                  }}
+                />
                 <Legend />
-                <Bar dataKey="completed" fill="#8884d8" name="Completion %" />
+                <Bar 
+                  dataKey="completed" 
+                  name="Completion %"
+                  radius={[8, 8, 0, 0]}
+                >
+                  {dayOfWeekData.map((entry, index) => {
+                    // Color based on completion rate
+                    let fillColor = '#3b82f6';
+                    if (entry.completed >= 80) fillColor = '#10b981';
+                    else if (entry.completed >= 50) fillColor = '#eab308';
+                    else if (entry.completed >= 25) fillColor = '#f97316';
+                    else fillColor = '#ef4444';
+                    
+                    return <Cell key={`cell-${index}`} fill={fillColor} />;
+                  })}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -630,16 +793,63 @@ export function KPIDashboard({
         <Card>
           <CardHeader>
             <CardTitle>Monthly Comparison</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Track your progress across months
+            </p>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip formatter={(value: number | undefined) => value !== undefined ? `${value.toFixed(1)}%` : '0%'} />
+            <ResponsiveContainer width="100%" height={320}>
+              <BarChart data={monthlyData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
+                <XAxis 
+                  dataKey="month" 
+                  stroke="#6b7280"
+                  tick={{ fontSize: 11 }}
+                />
+                <YAxis 
+                  stroke="#6b7280"
+                  tick={{ fontSize: 11 }}
+                  domain={[0, 100]}
+                  tickFormatter={(value) => `${value}%`}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                  }}
+                  formatter={(value: number | undefined, name?: string, props?: any) => {
+                    if (value === undefined || !props) return '0%';
+                    return [
+                      <div key="tooltip" className="space-y-1">
+                        <div className="font-semibold">{value.toFixed(1)}%</div>
+                        <div className="text-xs text-muted-foreground">
+                          {props.payload?.completed || 0} of {props.payload?.total || 0} completions
+                        </div>
+                      </div>,
+                      'Completion Rate'
+                    ];
+                  }}
+                />
                 <Legend />
-                <Bar dataKey="rate" fill="#82ca9d" name="Completion Rate %" />
+                <Bar 
+                  dataKey="rate" 
+                  name="Completion Rate %"
+                  radius={[8, 8, 0, 0]}
+                >
+                  {monthlyData.map((entry, index) => {
+                    // Color based on completion rate
+                    let fillColor = '#10b981';
+                    if (entry.rate >= 80) fillColor = '#10b981';
+                    else if (entry.rate >= 50) fillColor = '#eab308';
+                    else if (entry.rate >= 25) fillColor = '#f97316';
+                    else fillColor = '#ef4444';
+                    
+                    return <Cell key={`cell-${index}`} fill={fillColor} />;
+                  })}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -647,45 +857,61 @@ export function KPIDashboard({
 
         <Card>
           <CardHeader>
-            <CardTitle>Goal Completion Distribution</CardTitle>
+            <CardTitle>Weekly Activity Overview</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Total completions per week (Last 12 weeks)
+            </p>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={goalCompletionData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, value }) => `${name}: ${value.toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
+            <ResponsiveContainer width="100%" height={320}>
+              <BarChart data={weeksData} margin={{ top: 5, right: 20, left: 0, bottom: 80 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.3} />
+                <XAxis 
+                  dataKey="week" 
+                  angle={-45} 
+                  textAnchor="end" 
+                  height={100}
+                  stroke="#6b7280"
+                  tick={{ fontSize: 11 }}
+                />
+                <YAxis 
+                  stroke="#6b7280"
+                  tick={{ fontSize: 11 }}
+                  domain={[0, 'dataMax + 1']}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                  }}
+                  formatter={(value: number | undefined) => {
+                    if (value === undefined) return '0';
+                    return `${value} completions`;
+                  }}
+                />
+                <Legend />
+                <Bar 
+                  dataKey="completions" 
+                  name="Total Completions"
+                  radius={[8, 8, 0, 0]}
                 >
-                  {goalCompletionData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value: number | undefined) => value !== undefined ? `${value.toFixed(1)}%` : '0%'} />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Weekly Activity Heatmap (Last 12 Weeks)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={weeksData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="week" angle={-45} textAnchor="end" height={100} />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="completions" fill="#ffc658" name="Total Completions" />
+                  {weeksData.map((entry, index) => {
+                    // Color based on completion count (heatmap style)
+                    const maxCompletions = Math.max(...weeksData.map(w => w.completions));
+                    const intensity = entry.completions / maxCompletions;
+                    let fillColor = '#fef3c7'; // Light yellow
+                    if (intensity >= 0.8) fillColor = '#10b981'; // Green
+                    else if (intensity >= 0.6) fillColor = '#84cc16'; // Light green
+                    else if (intensity >= 0.4) fillColor = '#eab308'; // Yellow
+                    else if (intensity >= 0.2) fillColor = '#f97316'; // Orange
+                    else fillColor = '#fef3c7'; // Light yellow
+                    
+                    return <Cell key={`cell-${index}`} fill={fillColor} />;
+                  })}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
