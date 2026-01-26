@@ -410,11 +410,11 @@ export default function HomePage() {
               <CardContent className="space-y-4">
                 <div className="flex items-baseline gap-3">
                   <div>
-                    <span className="text-3xl font-bold">$4.99</span>
+                    <span className="text-3xl font-bold">$2.00</span>
                     <span className="text-sm text-muted-foreground ml-1">/ month</span>
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    or <span className="font-semibold text-primary">$49.99</span> / year
+                    or <span className="font-semibold text-primary">$24.00</span> / year
                   </div>
                 </div>
                 <ul className="space-y-2 text-sm text-muted-foreground">

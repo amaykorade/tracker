@@ -172,7 +172,7 @@ export default function Home() {
     // Razorpay expects amount in the smallest currency unit.
     // For USD, this is cents.
     const isMonthly = billing === "monthly";
-    const amountInCents = isMonthly ? 499 : 4999; // $4.99 or $49.99
+    const amountInCents = isMonthly ? 200 : 2400; // $2.00 or $24.00
 
     const options = {
       key,
@@ -180,8 +180,8 @@ export default function Home() {
       currency: "USD",
       name: "Goal Tracker",
       description: isMonthly
-        ? "Goal Tracker Pro - Monthly Plan ($4.99/month)"
-        : "Goal Tracker Pro - Yearly Plan ($49.99/year)",
+        ? "Goal Tracker Pro - Monthly Plan ($2.00/month)"
+        : "Goal Tracker Pro - Yearly Plan ($24.00/year)",
       handler: async function () {
         try {
           const userRef = doc(db, "users", user.uid);
@@ -338,7 +338,7 @@ export default function Home() {
             <div className="border rounded-lg p-4 flex flex-col justify-between">
               <div>
                 <h3 className="font-semibold mb-1">Monthly</h3>
-                <p className="text-2xl font-bold mb-1">$4.99</p>
+                <p className="text-2xl font-bold mb-1">$2.00</p>
                 <p className="text-xs text-muted-foreground mb-3">Billed every month</p>
                 <ul className="text-xs text-muted-foreground space-y-1">
                   <li>• Unlimited goals</li>
@@ -356,10 +356,10 @@ export default function Home() {
             <div className="border rounded-lg p-4 flex flex-col justify-between bg-primary/5 border-primary/40">
               <div>
                 <h3 className="font-semibold mb-1">Yearly</h3>
-                <p className="text-2xl font-bold mb-1">$49.99</p>
+                <p className="text-2xl font-bold mb-1">$24.00</p>
                 <p className="text-xs text-muted-foreground mb-3">Billed once per year</p>
                 <p className="text-xs font-medium text-primary mb-2">
-                  Save ~17% compared to monthly
+                  Same monthly rate, pay upfront
                 </p>
                 <ul className="text-xs text-muted-foreground space-y-1">
                   <li>• Everything in Monthly</li>
