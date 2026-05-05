@@ -3,7 +3,7 @@ import { Goal, GoalCompletion } from "@/types";
 import { db } from "@/lib/firebase";
 import { useAuth } from "./use-auth";
 import { useToast } from "@/hooks/use-toast";
-import { getTrackingDate, compareWithTrackingDate } from "@/lib/date-utils";
+import { compareWithTrackingDate, goalCreatedDateKey } from "@/lib/date-utils";
 import {
   collection,
   addDoc,
@@ -84,11 +84,18 @@ export function useGoals() {
           const goalsData: Goal[] = [];
           snapshot.forEach((doc) => {
             const data = doc.data();
+            const endDateRaw = data.endDate;
+            const endDate =
+              typeof endDateRaw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(endDateRaw.trim())
+                ? endDateRaw.trim()
+                : null;
             goalsData.push({
               id: doc.id,
               title: data.title,
-              createdAt: data.createdAt?.toDate() || new Date(),
+              // Missing createdAt (legacy docs): use epoch so tracking isn't wrongly limited to "today"
+              createdAt: data.createdAt?.toDate() ?? new Date(0),
               sortOrder: data.sortOrder ?? 0,
+              endDate: endDate ?? undefined,
             });
           });
           // Sort by sortOrder, then by createdAt
@@ -349,7 +356,15 @@ export function useGoals() {
         // Future date - cannot be completed (always disabled)
         throw new Error("Future dates cannot be completed");
       }
-      
+
+      const goal = goals.find((g) => g.id === goalId);
+      if (!goal) {
+        throw new Error("Goal not found");
+      }
+      if (date < goalCreatedDateKey(goal)) {
+        throw new Error("Cannot complete dates before this goal was created");
+      }
+
       try {
         const key = `${goalId}-${date}`;
         // Use userId in document ID to ensure user isolation
@@ -374,7 +389,7 @@ export function useGoals() {
         throw error;
       }
     },
-    [completions, user, allowPastDateEditing]
+    [completions, user, allowPastDateEditing, goals]
   );
 
   const isCompleted = useCallback(

@@ -49,6 +49,12 @@ export function AuthDialog({ open, onOpenChange, onSuccess }: AuthDialogProps) {
       
       if (err.code === "auth/account-exists-with-different-credential") {
         errorMessage = "An account with this email already exists. Please use a different sign-in method.";
+      } else if (err.code === "auth/unauthorized-domain") {
+        errorMessage =
+          "This site URL is not allowed for sign-in. In Firebase Console → Authentication → Settings, add your production domain under Authorized domains (e.g. your-app.vercel.app).";
+      } else if (err.code === "auth/operation-not-allowed") {
+        errorMessage =
+          "Google sign-in is not enabled. In Firebase Console → Authentication → Sign-in method, enable Google.";
       } else if (err.code === "auth/popup-blocked") {
         errorMessage = "Popup was blocked. Please allow popups for this site and try again.";
       } else if (err.code === "auth/network-request-failed") {

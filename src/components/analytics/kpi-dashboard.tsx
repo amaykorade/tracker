@@ -20,7 +20,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { format, subDays, eachDayOfInterval, startOfWeek, endOfWeek, eachWeekOfInterval, getDay, startOfMonth, endOfMonth, eachMonthOfInterval, isSameMonth, isSameDay, startOfYear, endOfYear, subMonths } from "date-fns";
-import { formatDateKey } from "@/lib/date-utils";
+import { formatDateKey, goalCreatedDateKey, parseYmdToLocalDate } from "@/lib/date-utils";
 import { Calendar, Filter } from "lucide-react";
 // import { ShareProgress } from "@/components/share/share-progress";
 
@@ -120,15 +120,24 @@ export function KPIDashboard({
   // Calculate overall completion rate based on filtered date range
   const rangeDays = eachDayOfInterval({ start: startDate, end: endDate });
   const totalDays = rangeDays.length;
-  const totalPossibleCompletions = goals.length * totalDays;
-  
-  // Count completions within the date range
+  const rangeStartKey = formatDateKey(startDate);
+  const rangeEndKey = formatDateKey(endDate);
+
+  let totalPossibleCompletions = 0;
+  rangeDays.forEach((day) => {
+    const dk = formatDateKey(day);
+    goals.forEach((goal) => {
+      if (goalCreatedDateKey(goal) <= dk) totalPossibleCompletions++;
+    });
+  });
+
   let totalCompletions = 0;
   completions.forEach((completion) => {
-    const completionDate = new Date(completion.date);
-    if (completionDate >= startDate && completionDate <= endDate) {
-      totalCompletions++;
-    }
+    const goal = goals.find((g) => g.id === completion.goalId);
+    if (!goal) return;
+    if (completion.date < goalCreatedDateKey(goal)) return;
+    if (completion.date < rangeStartKey || completion.date > rangeEndKey) return;
+    totalCompletions++;
   });
   
   const completionRate =
@@ -145,7 +154,8 @@ export function KPIDashboard({
   const dailyData = last30Days.map((date) => {
     const dateKey = formatDateKey(date);
     let completed = 0;
-    goals.forEach((goal) => {
+    const activeGoals = goals.filter((g) => goalCreatedDateKey(g) <= dateKey);
+    activeGoals.forEach((goal) => {
       if (completions.has(`${goal.id}-${dateKey}`)) {
         completed++;
       }
@@ -153,27 +163,29 @@ export function KPIDashboard({
     return {
       date: format(date, "MMM dd"),
       completed,
-      total: goals.length,
+      total: activeGoals.length,
     };
   });
 
   // Calculate goal-wise completion data (within date range)
   const goalData = goals.map((goal) => {
     let completed = 0;
+    const createdKey = goalCreatedDateKey(goal);
     completions.forEach((completion) => {
-      if (completion.goalId === goal.id) {
-        const completionDate = new Date(completion.date);
-        if (completionDate >= startDate && completionDate <= endDate) {
-          completed++;
-        }
-      }
+      if (completion.goalId !== goal.id) return;
+      if (completion.date < createdKey) return;
+      if (completion.date < rangeStartKey || completion.date > rangeEndKey) return;
+      completed++;
+    });
+    let eligibleDays = 0;
+    rangeDays.forEach((day) => {
+      if (formatDateKey(day) >= createdKey) eligibleDays++;
     });
     return {
       name: goal.title.length > 15 ? goal.title.substring(0, 15) + "..." : goal.title,
       completed,
-      percentage: totalDays > 0 
-        ? ((completed / totalDays) * 100).toFixed(0)
-        : 0,
+      percentage:
+        eligibleDays > 0 ? ((completed / eligibleDays) * 100).toFixed(0) : 0,
     };
   });
 
@@ -184,10 +196,11 @@ export function KPIDashboard({
   // Calculate Average Daily Completions (within date range)
   const allCompletionDates = new Set<string>();
   completions.forEach((completion) => {
-    const completionDate = new Date(completion.date);
-    if (completionDate >= startDate && completionDate <= endDate) {
-      allCompletionDates.add(completion.date);
-    }
+    const goal = goals.find((g) => g.id === completion.goalId);
+    if (!goal) return;
+    if (completion.date < goalCreatedDateKey(goal)) return;
+    if (completion.date < rangeStartKey || completion.date > rangeEndKey) return;
+    allCompletionDates.add(completion.date);
   });
   const totalDaysWithCompletions = allCompletionDates.size;
   const averageDailyCompletions = totalDaysWithCompletions > 0
@@ -211,25 +224,26 @@ export function KPIDashboard({
   ];
 
   completions.forEach((completion) => {
-    const date = new Date(completion.date);
-    // Only count completions within the selected date range
-    if (date >= startDate && date <= endDate) {
-      const dayOfWeek = getDay(date);
-      const dayData = dayOfWeekData.find(d => d.day === dayOfWeek);
-      if (dayData) {
-        dayData.completed++;
-      }
+    const goal = goals.find((g) => g.id === completion.goalId);
+    if (!goal) return;
+    if (completion.date < goalCreatedDateKey(goal)) return;
+    if (completion.date < rangeStartKey || completion.date > rangeEndKey) return;
+    const date = parseYmdToLocalDate(completion.date);
+    const dayOfWeek = getDay(date);
+    const dayData = dayOfWeekData.find((d) => d.day === dayOfWeek);
+    if (dayData) {
+      dayData.completed++;
     }
   });
 
   // Calculate total possible completions per day of week (within date range)
   if (goals.length > 0) {
-    const rangeDays = eachDayOfInterval({ start: startDate, end: endDate });
     rangeDays.forEach((day) => {
+      const dateKey = formatDateKey(day);
       const dayOfWeek = getDay(day);
-      const dayData = dayOfWeekData.find(d => d.day === dayOfWeek);
+      const dayData = dayOfWeekData.find((d) => d.day === dayOfWeek);
       if (dayData) {
-        dayData.total += goals.length;
+        dayData.total += goals.filter((g) => goalCreatedDateKey(g) <= dateKey).length;
       }
     });
   }
@@ -245,11 +259,13 @@ export function KPIDashboard({
     const monthEnd = endOfMonth(monthStart);
     const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
     let monthCompleted = 0;
-    let monthTotal = goals.length * days.length;
+    let monthTotal = 0;
 
     days.forEach((day) => {
       const dateKey = formatDateKey(day);
+      monthTotal += goals.filter((g) => goalCreatedDateKey(g) <= dateKey).length;
       goals.forEach((goal) => {
+        if (goalCreatedDateKey(goal) > dateKey) return;
         if (completions.has(`${goal.id}-${dateKey}`)) {
           monthCompleted++;
         }
@@ -268,11 +284,12 @@ export function KPIDashboard({
   const goalCompletionData = goals.map((goal) => {
     let goalCompleted = 0;
     let goalTotal = 0;
+    const createdKey = goalCreatedDateKey(goal);
 
-    // Use the date range days instead of filtered months
     rangeDays.forEach((day) => {
-      goalTotal++;
       const dateKey = formatDateKey(day);
+      if (dateKey < createdKey) return;
+      goalTotal++;
       if (completions.has(`${goal.id}-${dateKey}`)) {
         goalCompleted++;
       }
@@ -280,7 +297,7 @@ export function KPIDashboard({
 
     return {
       name: goal.title.length > 20 ? goal.title.substring(0, 20) + "..." : goal.title,
-      value: goalTotal > 0 ? ((goalCompleted / goalTotal) * 100) : 0,
+      value: goalTotal > 0 ? (goalCompleted / goalTotal) * 100 : 0,
       completed: goalCompleted,
       total: goalTotal,
     };
@@ -303,6 +320,7 @@ export function KPIDashboard({
     weekDays.forEach((day) => {
       const dateKey = formatDateKey(day);
       goals.forEach((goal) => {
+        if (goalCreatedDateKey(goal) > dateKey) return;
         if (completions.has(`${goal.id}-${dateKey}`)) {
           weekCompletions++;
         }
@@ -939,20 +957,21 @@ function calculateCurrentStreak(
   let streak = 0;
   let currentDate = new Date(rangeEnd);
 
-  while (true) {
+  while (currentDate >= rangeStart) {
     const dateKey = formatDateKey(currentDate);
-    let allCompleted = true;
+    const activeGoals = goals.filter((g) => goalCreatedDateKey(g) <= dateKey);
 
-    for (const goal of goals) {
-      if (!completions.has(`${goal.id}-${dateKey}`)) {
-        allCompleted = false;
-        break;
-      }
+    if (activeGoals.length === 0) {
+      currentDate.setDate(currentDate.getDate() - 1);
+      continue;
     }
+
+    const allCompleted = activeGoals.every((g) =>
+      completions.has(`${g.id}-${dateKey}`)
+    );
 
     if (allCompleted) {
       streak++;
-      currentDate = new Date(currentDate);
       currentDate.setDate(currentDate.getDate() - 1);
     } else {
       break;
@@ -970,23 +989,24 @@ function calculateLongestStreak(
 ): number {
   if (goals.length === 0) return 0;
 
-  // Get all completion dates within range
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const rangeEnd = endDate ? new Date(endDate) : today;
   rangeEnd.setHours(23, 59, 59, 999);
   const rangeStart = startDate ? new Date(startDate) : subDays(today, 365);
   rangeStart.setHours(0, 0, 0, 0);
+  const rangeStartKey = formatDateKey(rangeStart);
+  const rangeEndKey = formatDateKey(rangeEnd);
 
   const completionDates = new Set<string>();
   completions.forEach((completion) => {
-    const completionDate = new Date(completion.date);
-    if (completionDate >= rangeStart && completionDate <= rangeEnd) {
-      completionDates.add(completion.date);
-    }
+    const goal = goals.find((g) => g.id === completion.goalId);
+    if (!goal) return;
+    if (completion.date < goalCreatedDateKey(goal)) return;
+    if (completion.date < rangeStartKey || completion.date > rangeEndKey) return;
+    completionDates.add(completion.date);
   });
 
-  // Sort dates
   const sortedDates = Array.from(completionDates).sort();
   if (sortedDates.length === 0) return 0;
 
@@ -995,17 +1015,13 @@ function calculateLongestStreak(
   let lastDate: Date | null = null;
 
   for (const dateStr of sortedDates) {
-    const date = new Date(dateStr);
+    const date = parseYmdToLocalDate(dateStr);
     date.setHours(0, 0, 0, 0);
 
-    // Check if all goals were completed on this date
-    let allCompleted = true;
-    for (const goal of goals) {
-      if (!completions.has(`${goal.id}-${dateStr}`)) {
-        allCompleted = false;
-        break;
-      }
-    }
+    const activeGoals = goals.filter((g) => goalCreatedDateKey(g) <= dateStr);
+    const allCompleted =
+      activeGoals.length > 0 &&
+      activeGoals.every((g) => completions.has(`${g.id}-${dateStr}`));
 
     if (allCompleted) {
       if (lastDate === null) {

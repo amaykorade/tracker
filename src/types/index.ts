@@ -3,6 +3,8 @@ export interface Goal {
   title: string;
   createdAt: Date;
   sortOrder?: number; // For drag and drop ordering
+  /** End date for tracking (YYYY-MM-DD). Syncs with mobile. */
+  endDate?: string | null;
 }
 
 export interface GoalCompletion {

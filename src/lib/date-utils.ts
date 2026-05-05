@@ -72,6 +72,23 @@ export function formatDateKey(date: Date | string): string {
   return format(dateObj, "yyyy-MM-dd");
 }
 
+/** Calendar date key (YYYY-MM-DD) for when the goal was added — tracking counts only from this day onward. */
+export function goalCreatedDateKey(goal: { createdAt: Date }): string {
+  const c =
+    goal.createdAt instanceof Date ? goal.createdAt : new Date(goal.createdAt as unknown as string);
+  return format(c, "yyyy-MM-dd");
+}
+
+export function isGoalTrackedOnDateKey(goal: { createdAt: Date }, dateKey: string): boolean {
+  return dateKey >= goalCreatedDateKey(goal);
+}
+
+/** Parse YYYY-MM-DD as local midnight-safe calendar date. */
+export function parseYmdToLocalDate(dateKey: string): Date {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
 /**
  * Compare a date string (YYYY-MM-DD) with the current tracking date
  * Returns: -1 if past, 0 if today, 1 if future

@@ -4,7 +4,7 @@ import { Goal, MonthData } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Trash2, Check, GripVertical, AlertTriangle } from "lucide-react";
-import { formatDateKey, getTrackingDate, compareWithTrackingDate } from "@/lib/date-utils";
+import { formatDateKey, compareWithTrackingDate, isGoalTrackedOnDateKey } from "@/lib/date-utils";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useSortable } from "@dnd-kit/sortable";
@@ -305,11 +305,17 @@ export function GoalItem({
                 const isFutureDate = comparison > 0;
                 const isPastDate = comparison < 0;
                 const isToday = comparison === 0;
+                const isBeforeGoalCreated = !isGoalTrackedOnDateKey(goal, dateKey);
 
                 // Add the checkbox button with enhanced date visibility
-                // Disable if: not current month, future date, past date (if not allowed), or locked
-                // If allowPastDateEditing is true, past dates are enabled
-                const isCheckboxDisabled = !isCurrentMonth || isFutureDate || (isPastDate && !allowPastDateEditing) || isLocked;
+                // Disable if: not current month, future date, past date (if not allowed), before goal existed, or locked
+                // If allowPastDateEditing is true, past dates are enabled (but never before the goal was created)
+                const isCheckboxDisabled =
+                  !isCurrentMonth ||
+                  isFutureDate ||
+                  (isPastDate && !allowPastDateEditing) ||
+                  isBeforeGoalCreated ||
+                  isLocked;
                 elements.push(
                   <button
                     key={`${dateKey}-${index}`}
@@ -319,7 +325,13 @@ export function GoalItem({
                         return;
                       }
                       // Allow past dates if allowPastDateEditing is true, but always block future dates
-                      if (!isCurrentMonth || isFutureDate || (isPastDate && !allowPastDateEditing)) return;
+                      if (
+                        !isCurrentMonth ||
+                        isFutureDate ||
+                        (isPastDate && !allowPastDateEditing) ||
+                        isBeforeGoalCreated
+                      )
+                        return;
                       // Check if auth is required
                       try {
                         await onToggleCompletion(goal.id, dateKey);
@@ -335,14 +347,17 @@ export function GoalItem({
                       completed
                         ? "bg-green-500 border-green-600 text-white"
                         : "bg-background border-input hover:bg-accent active:bg-accent",
-                      isCheckboxDisabled && "cursor-not-allowed opacity-50",
+                      isCheckboxDisabled &&
+                        (isBeforeGoalCreated ? "cursor-not-allowed opacity-30" : "cursor-not-allowed opacity-50"),
                       isLocked && "opacity-30"
                     )}
                     title={
                       isLocked
                         ? "Upgrade to Pro to unlock this goal"
-                        : isFutureDate 
-                        ? "Future dates cannot be completed" 
+                        : isBeforeGoalCreated
+                        ? "Tracking starts from when this goal was added"
+                        : isFutureDate
+                        ? "Future dates cannot be completed"
                         : isPastDate && !allowPastDateEditing
                         ? "Past dates cannot be changed"
                         : `${goal.title} - ${format(date, "MMM d, yyyy")}`
